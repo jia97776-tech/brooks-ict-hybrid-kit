@@ -1,5 +1,15 @@
 # brooks-ict-hybrid CHANGELOG
 
+## 2026-07-12j — stop-scope lock / no post-fill widening / file-position isolation
+
+- Initial stops now declare one scope before entry: `M1/M5 触发损`, `M15 结构损`, or `H4 POI 整层损`. The desk must enumerate every relevant 候选锚 inside that scope before selecting the outermost anchor and adding buffer.
+- Clarified relevance: HTF background confluence does not automatically force an H4-wide stop. A remote POI edge enters the formula only when the trade thesis explicitly requires that whole layer to hold.
+- Removed the remaining top-level and evidence-table wording that automatically pushed any confluence stop beyond the outermost HTF edge.
+- Any omitted relevant anchor or ambiguous stop scope invalidates the pre-fill plan and requires `重新计算 entry / size / management / RR`.
+- The initial hard stop is locked after fill. It may remain or tighten behind newly confirmed structure, but it may never widen into loss. A scope/anchor mistake is corrected by reducing or closing; a wider stop belongs to a newly sized new ticket.
+- HYPE calibration: `66.45 - 0.04 = 66.41` was arithmetically correct; the pre-entry audit question is whether `66.45` was the correct anchor for the declared scope. After fill, `66.31` cannot be relabeled as a replacement structural stop.
+- Added `文件操作 ≠ 仓位操作`: editing, optimizing, reverting, validating, or backing up the skill does not mutate a live position unless the user explicitly names the symbol and position action.
+
 ## 2026-07-12i — confirmed LTF market-first routing
 
 - User ruling: market entry is not merely tolerated after a legal M1/M5 confirmation. When the user is on-screen and all objective market conditions pass, market is the first execution choice; event stop is the fallback when any condition fails.

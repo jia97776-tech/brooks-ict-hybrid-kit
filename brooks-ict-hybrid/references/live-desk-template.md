@@ -159,7 +159,9 @@ For a market entry, output exactly one entry expression:
 ```text
 {SYMBOL}：{TF} {event type} 已确认，现价 {price} 可以市价{多|空}.
 冻结价 {frozen level}；确认 K 区间 [{low}, {high}]，现价仍在区间内且位于冻结价正确一侧。
-止损算术：anchor {outermost stop-side level}；buffer {max(0.25 ATR, spread pad)}；硬损 {anchor +/- buffer, rounded outward only}.
+止损级别：{M1/M5 触发损|M15 结构损|H4 POI 整层损}.
+候选锚：{all relevant candidates inside the declared scope}; anchor {selected outermost relevant level}.
+止损算术：buffer {max(0.25 ATR, spread pad)}；硬损 {anchor +/- buffer, rounded outward only}.
 {management} 先减仓；移损只到新确认结构外 + buffer，不移入场价。
 主目标 {target}；只有 {TF} 收盘突破 {runner activation} 才留 runner 到 {runner target}.
 ```
@@ -171,7 +173,9 @@ Worked market example:
 ```text
 EURUSD：M5 MSS 已确认，现价 1.13690 可以市价空。
 冻结价 1.13710；确认 K 区间 [1.13680, 1.13745]。
-止损算术：anchor=max(序列高 1.13820, 旧高 1.13835)=1.13835；buffer=0.25×0.00080=0.00020；硬损至少 1.13855。
+止损级别：M15 结构损。
+候选锚：序列高 1.13820、M15 旧高 1.13835；anchor=max(...)=1.13835。
+止损算术：buffer=0.25×0.00080=0.00020；硬损至少 1.13855。
 1.13580 先减仓；移损只到后续 M5 确认结构外，不推入场价。
 主目标 1.13480；M5 收盘低于 1.13460 才留 runner 到 1.13250。
 ```

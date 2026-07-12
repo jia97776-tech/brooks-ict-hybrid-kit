@@ -15,7 +15,7 @@ Loaded with SKILL on every live give-plan or position-management answer.
 | **MSS+CISD double-confirm is not an entry edge:** strict M15 slice win rate 6.5% vs MSS-only 11.3%; CISD-only was the worst slice at −0.388R avg. | 2026-07-10 | **Policy:** MSS+CISD may establish direction/structure maturity, but never supplies entry permission by itself. Execution still requires a legal Ladder Tier1/2 or another named PA entry path; CISD-only is not pushed. |
 | **Mechanical trigger ≈ zero edge** (deep replay 2026-07-11: 15955 M5 three-step/continuation triggers off M15 sweep parents, 24 symbols, 5 months, ~2512 independent symbol-days): gross expectancy ≈ 0R every single month; NO mechanical quality gate (D1-align / HTF confluence / session / RR / freshness / barbwire / climax / micro-channel / signal-bar grade / second-entry / failed-trigger early exit) moved avgR by ≥0.15R; stacked A/S gate combos stayed ≈0 (win rate ~30%). Also mildly refuted: "strong signal bar better" and "failed-trigger early exit saves money" (31% false kills). | 2026-07-11 | **Policy:** trigger mechanics are **legality, not edge**. A legal sequence only earns the right to be judged; the alpha layer is the human/desk read (journal 35 trades +1.76R vs machine ≈0). Never let mechanical gates auto-promote a push to "A/S 单"; A/S is a judgment verdict, not a filter output. Fees/slippage make unfiltered mechanical triggering strictly negative. Live sensors (`signal_bar_quality` / `hl_count` / SMT / env flags) are on-demand evidence for the desk verdict only — never auto gates. |
 | Papertrack `mfe_r` accounting fixed 2026-07-10 (fill bar + stop bar excluded). Rows resolved before that date carry inflated MFE. | 2026-07-10 | Do not mix pre/post-fix mfe_r in one statistic. |
-| **HTF confluence does not upgrade** (H4 signal replay 5.5 months): signals overlapping a D1 array were **worse** (−0.047 vs +0.112 without, n=257/77 — only result past significance). LTF layer same verdict (deep replay 2026-07-11, gate G2): M15/M5-level array confluence on triggers moved avgR by only **Δ+0.01R** — indistinguishable from none. | 2026-07-11 | **Policy:** multi-TF confluence may set stop beyond outermost HTF array edge, invalidation (close-through of stacked zone), and target confluence — never size-up, grade-up, or lower trigger bar. Applies at every TF pair tested (D1∩H4 and M15/M5). |
+| **HTF confluence does not upgrade** (H4 signal replay 5.5 months): signals overlapping a D1 array were **worse** (−0.047 vs +0.112 without, n=257/77 — only result past significance). LTF layer same verdict (deep replay 2026-07-11, gate G2): M15/M5-level array confluence on triggers moved avgR by only **Δ+0.01R** — indistinguishable from none. | 2026-07-11 | **Policy:** multi-TF confluence may define stacked-zone invalidation and target confluence, but it enters the stop formula only when the declared stop scope/thesis requires that entire layer to hold. Never auto-widen, size-up, grade-up, or lower the trigger bar. Applies at every TF pair tested (D1∩H4 and M15/M5). |
 | **FVG/iFVG CE limits show no stable improvement over the confirmation-bar stop** (M5 replay `backtest_fvg_ifvg_entries.md`, mss/cisd/both, 24 symbols, ~4 months): aggregate CE expectancy was slightly negative and most soft-exit variants were no better; isolated slice improvements stayed far below the 0.15R rule-change threshold. | 2026-07-12 | **Policy:** FVG/iFVG CE is an **optional price-improvement order only** — never "equal trigger", never auto-`mgmt2r`, never an entry without the completed sequence. Soft-exit-on-array-close-through is not a default. |
 | **Broken-structure retest limit (方案B) shows no stable advantage over event_stop** (`backtest_struct_retest_limit.md`, same engine but valid-order sample counts differ): aggregate fill ~80%, lower win/fill, and 8-12% missed alpha; some slices were marginally better and others worse, all well below 0.15R/signal. CISD aggregate was clearly worse. Cancel-on-close-back is mostly ineffective when the limit sits at the broken level because price normally fills before it can close back. | 2026-07-12 | **Policy:** retest limit is a legal "confirmed but not chasing" alternative with an observed small opportunity cost, not a proven fixed cost; do not offer it on cisd-only events. Default expression remains event_stop; no tested expression is an edge. |
 
@@ -36,7 +36,7 @@ When scanner is CONDITIONAL_READY missing MSS/CISD:
    CISD-only candidates (no MSS): do not push, do not volunteer plans — worst papertrack slice (−0.388R avg).
    07-06 CHF/AUD losses were demotions (no deep limit+structural stop, no full sequence) — not failures of these two paths.
 
-2. **Stop triple constraint** (also in SKILL): first choose the outermost stop-side anchor, then add buffer. Short anchor = `max(sequence/structure high, unfinished equal or old high, unfilled POI upper edge)`; long is the mirrored minimum. SL must also satisfy `|entry−SL| ≥ 0.5×ATR(entry TF)` (M1 whitelist scalp excepted). When not using the sweep extreme, the structural candidate must be a confirmed swing on the entry TF — never a mid-noise wick or stale scanner SL tightened for R.
+2. **Stop scope + triple constraint** (also in SKILL): first lock `M1/M5 触发损`, `M15 结构损`, or `H4 POI 整层损`. Enumerate every relevant 候选锚 inside that scope, choose the outermost one, then add buffer. Short anchor = the maximum relevant sequence/confirmed-structure high, unfinished equal/old high, and POI edge that this thesis must hold; long is mirrored. 背景 confluence or a remote map level does not enter the formula unless crossing it invalidates the declared trade. SL must also satisfy `|entry−SL| ≥ 0.5×ATR(entry TF)` (M1 whitelist scalp excepted). When not using the sweep extreme, the structural candidate must be confirmed — never a mid-noise wick or stale scanner SL tightened for R.
 
 3. **Management distance:** if management level (partial/BE) is `< 1×ATR` from entry, 目标太近不做.
 
@@ -68,7 +68,7 @@ Before any entry plan is spoken, run all five **internally**. Speak desk Chinese
 2. **Environment:** red news ±30min no entry; 30–60min after red print no M5-tier triggers (ETH 07-08 FOMC minutes); weekend/holiday thin tape → raise bar. For unscheduled geopolitical/headline shocks, pause new market/breakout orders until the first M15 close. Existing deep limits may stay unchanged or be cancelled; never move the stop, add size, or flip direction from the headline alone. Reclassify only after price shows noise / structural shock / multi-ATR breakdown.
 3. **Beta:** any alt crypto long → BTC check (section 4).
 4. **Fuse state:** day loss count + same-structure stop count (section 5).
-5. **Stop exam:** triple constraint. (a) Beyond the true structure extreme by at least 0.25×ATR/spread pad, (b) distance ≥0.5×entry-TF ATR except whitelisted M1 scalp, and (c) beyond unfinished stop-side liquidity: equal highs/lows, prior swing pools, or unfilled M15/H4 POIs. A stop sitting inside the market's next destination is invalid even when (a) and (b) pass. If the sweep has not printed its true extreme, do not prewrite a tight fade stop. High R comes from entry; cut size or pass instead of shrinking SL.
+5. **Stop exam:** declare stop scope, then pass the triple constraint. (a) Enumerate 候选锚 and place the stop beyond the outermost relevant structure extreme by at least 0.25×ATR/spread pad, (b) distance ≥0.5×entry-TF ATR except whitelisted M1 scalp, and (c) beyond unfinished stop-side liquidity that belongs to the declared scope and must be processed for this thesis. A background confluence level does not force an H4-wide stop. A relevant pool omitted from the list invalidates the plan even when (a) and (b) pass. If scope/anchors change before fill, cancel and 重新计算 entry / size / management / RR. If the sweep has not printed its true extreme, do not prewrite a tight fade stop. High R comes from entry; cut size or pass instead of shrinking SL.
 
 ---
 
@@ -80,6 +80,7 @@ While first stop has not traded:
 2. Suggest discretionary exit only when **M5 close** breaks key structure; wick alone does not count.
 3. “磨时间” is not an exit reason. H4 POI rejects are slow by design.
 4. BE stop on confirmed structure (M5 swing), **never at entry price.**
+5. **Never widen the initial hard stop after fill.** Long: any new SL below the initial hard stop is wider risk; short: any new SL above it is wider risk. The initial hard stop may stay or move toward profit behind newly confirmed structure. If the original stop scope or anchor audit was wrong, keep the initial stop while reducing size, or close the old ticket; a wider structural stop requires a 新票据 with newly sized risk. Cutting size does not legalize moving the price stop farther away.
 
 ### +1R harvest law
 
@@ -108,11 +109,15 @@ Division of labor phrase for live Chinese when needed: `触发我可以直接拉
 
 ### Deviation protocol
 
-User early entry / self-tightened stop inside structure / missed pending converted to market chase:
+User early entry / self-tightened stop inside structure / widened stop after fill / missed pending converted to market chase:
 
 1. One sentence naming the deviation + historical cost.
 2. Correction options (cancel & re-place / restore structural stop while cutting size to keep original risk $).
 3. Then manage. Silent takeover = collusion. If user insists, respect — but the cost was stated once.
+
+### File-operation / position-operation isolation
+
+`修 skill`, `优化止损逻辑`, `撤销这个修改`, and similar wording target files unless the user also gives an explicit symbol + position action. A file edit, revert, validation, or Git operation **不得改变当前仓位**, pending order, hard stop, targets, or journal state. Do not interpret “撤销 skill 修改” as close/cancel, and do not interpret “修止损逻辑” as move a live stop. If both file and position referents remain plausible, ask one short clarification before mutating either state.
 
 **Not a deviation:** user taking a complete Tier 2 sequence on-screen while desk had only quoted a Tier 1 deep limit — that is the preferred fill path; switch to three-brake management immediately.
 

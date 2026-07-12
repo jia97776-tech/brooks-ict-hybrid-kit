@@ -92,9 +92,10 @@ Wicks and single-bar appearance never decide the order. Once the sequence is com
 
 **Stop (two-stage, not “noise 3-tick”):**
 
-1. **At entry (default):** choose the outermost stop-side anchor first: short `max(sequence high, unfinished equal/old high, POI upper edge)`; long uses the mirrored minimum. Then place SL one full buffer beyond that anchor. Example: old high `1.13835`, ATR `0.00080`, buffer `0.00020` → short SL at least `1.13855` before spread rounding. Distance must also be `≥0.5×ATR(entry TF)`. Size down for width; never shrink stop to inflate R.
+1. **At entry (default):** declare one stop scope: `M1/M5 触发损`, `M15 结构损`, or `H4 POI 整层损`. List all 候选锚 inside that scope before selecting one. Short takes the maximum relevant sequence/confirmed-structure high, unfinished equal/old high, and thesis-required POI upper edge; long uses the mirrored minimum. Background HTF confluence is not a stop candidate unless the trade explicitly requires that whole layer to hold. Then place SL one full buffer beyond the selected anchor. Example: old high `1.13835`, ATR `0.00080`, buffer `0.00020` → short SL at least `1.13855` before spread rounding. Distance must also be `≥0.5×ATR(entry TF)`. Size down for width; never shrink stop to inflate R.
 2. **Tight-stop variant:** only a newly confirmed M1/M5 swing may replace the sequence extreme, and only when it independently passes all three stop constraints. It is never anchored to an unconfirmed wick.
-3. If any constraint fails → keep the original structural stop or do not trade.
+3. If the declared scope is ambiguous, any relevant candidate is omitted, or any constraint fails → no order; 重新计算 entry / size / management / RR or do not trade.
+4. After fill, the initial hard stop is locked. It may remain or tighten behind new confirmed structure; it may never widen. A wider scope requires flat first, then a new ticket.
 
 **Targets from fill:** near practical level = 主目标; far HTF DOL = runner only if HTF aligned. Counter-HTF: bank near only (cases 10–11).
 
