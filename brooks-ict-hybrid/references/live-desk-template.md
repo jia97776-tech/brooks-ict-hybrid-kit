@@ -123,7 +123,10 @@ For an unconfirmed new opportunity:
 
 事件 {MSS|CISD|MSS+CISD}；{TF} 冻结价 {frozen level}.
 {TF} 收盘{高于|低于} {frozen level} 后，下一根挂确认 K 极值 stop {trigger}.
-硬损 {stop}；有效 {n} 根 {TF}.
+止损级别：{M1/M5 触发损|M15 结构损|H4 POI 整层损}.
+候选锚：{all relevant candidates inside the declared scope}; anchor {selected outermost relevant level}.
+止损算术：buffer {max(0.25 ATR, spread pad)}；硬损 {anchor +/- buffer, rounded outward only}.
+有效 {n} 根 {TF}.
 {management level} 先做管理，主目标 {main target}；只有 {TF} 收盘突破 {runner activation level} 才留 runner。
 未成交前收盘穿回 {frozen level}，或 {n} 根到期，撤单。
 ```
@@ -148,7 +151,8 @@ If the prompt/raw bars already state that an M1/M5 event is confirmed, do not wr
 ```text
 {SYMBOL}：{TF} {event type} 已确认，{市价可进|下一根挂确认 K 极值 stop}.
 冻结价 {frozen level}；现价 {price}；确认 K 区间 [{low}, {high}].
-{市价入场价|stop触发价} {entry}; hard SL {triple-constraint stop}.
+{市价入场价|stop触发价} {entry}.
+止损级别 {scope}；候选锚 {candidates}；anchor {selected}; buffer {buffer}; hard SL {triple-constraint stop}.
 {pending only: 有效 6 根 TF；未成交前收盘穿回 frozen level 撤单}.
 ```
 
@@ -222,10 +226,23 @@ For a conditional order plan:
 
 事件 {MSS|CISD|MSS+CISD}；{TF} 冻结价 {frozen level}.
 {TF} 收盘{高于|低于} {frozen level} 后，下一根在确认 K {高点上方|低点下方}挂 {buy-stop|sell-stop} {trigger}.
-硬损 {stop}；有效 {n} 根 {TF}.
+止损级别：{M1/M5 触发损|M15 结构损|H4 POI 整层损}.
+候选锚：{all relevant candidates inside the declared scope}; anchor {selected outermost relevant level}.
+止损算术：buffer {max(0.25 ATR, spread pad)}；硬损 {anchor +/- buffer, rounded outward only}.
+有效 {n} 根 {TF}.
 {management level} 先做管理，主目标 {main target}；只有 {TF} 收盘突破 {runner activation level} 才留 runner。
 
 未成交前如果 {TF} 收盘穿回 {frozen level}，或 {n} 根到期，撤单。
+```
+
+Worked pending scope example:
+
+```text
+HYPE：M5 MSS 已确认，下一根挂确认 K 高点外 buy-stop 66.88。
+止损级别：M15 结构损。
+候选锚：M15 确认低点 66.57；anchor 66.57。
+止损算术：buffer 0.25×0.13=0.0325；硬损向外取整到 66.53。
+有效 6 根 M5；未成交前收盘穿回冻结价撤单。
 ```
 
 For a missed setup review:

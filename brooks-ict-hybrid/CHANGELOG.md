@@ -9,6 +9,8 @@
 - The initial hard stop is locked after fill. It may remain or tighten behind newly confirmed structure, but it may never widen into loss. A scope/anchor mistake is corrected by reducing or closing; a wider stop belongs to a newly sized new ticket.
 - HYPE calibration: `66.45 - 0.04 = 66.41` was arithmetically correct; the pre-entry audit question is whether `66.45` was the correct anchor for the declared scope. After fill, `66.31` cannot be relabeled as a replacement structural stop.
 - Added `文件操作 ≠ 仓位操作`: editing, optimizing, reverting, validating, or backing up the skill does not mutate a live position unless the user explicitly names the symbol and position action.
+- Closed the remaining pending-order loopholes: every market, event-stop, retest-limit, and deep-limit plan must print stop scope, all relevant candidates, anchor, buffer, and SL before fill.
+- Split deviation repair by lifecycle: pre-fill orders may be cancelled and rebuilt; filled tickets may never restore a wider price stop, even after reducing size.
 
 ## 2026-07-12i — confirmed LTF market-first routing
 

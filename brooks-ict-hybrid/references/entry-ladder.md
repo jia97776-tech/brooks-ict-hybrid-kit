@@ -60,7 +60,7 @@ Wicks and single-bar appearance never decide the order. Once the sequence is com
    事件形成后写下单一数字，禁止改用另一个结构价。
 3. 入场 TF **收盘价低于冻结价** = 确认；影线不算。
 4. 屏前先检查市价合同；全过则按现价成交，任一不过才从下一根起在确认 K 低点下方挂 sell-stop。
-5. 硬损先取 `anchor=max(本次序列最高点, 止损侧未完成等高/旧高/POI上沿)`，再放 `anchor + buffer`（多单镜像；仍受止损三约束）。
+5. 硬损先声明 `M1/M5 触发损` / `M15 结构损` / `H4 POI 整层损`，列全该级别内相关候选锚，再取最外层 `anchor` 并加 `buffer`（多单镜像；仍受止损三约束）。背景旧高低、等高低或 POI 不因存在就自动入选。
 6. **订单 TTL：6 根入场 TF K 未成交自动撤单**（这是订单层规则；计划层作废仍遵守 Pending Order Lifecycle 的事件式语义，两层别混）。
 7. 未成交前，入场 TF 收盘重新越过冻结价 → 立即撤单。
 
@@ -74,9 +74,9 @@ Wicks and single-bar appearance never decide the order. Once the sequence is com
 
 **单订单约束**：市价、event stop、retest limit 三者每回合只选一个。选市价后禁止再给“反抽加仓/更舒服再加/备用 stop”；该市价已是本次事件主单。市价成交后不再适用 pending TTL/穿回撤单条款，也不得临时增加收盘软退出，除非入场前已经明确锁定。
 
-**市价止损算术必须外显**：先列 `anchor`、`buffer`，再算 `SL`。空单 `SL=anchor+buffer`，多单 `SL=anchor-buffer`；报价精度需要取整时只能向结构外取整。成交后不再给取消/失效线。到管理位减仓；若移损，只能移到新确认结构外加 buffer，不能直接移到 entry。
+**所有入场表达的止损算术必须外显**：市价、event stop、retest limit 与 deep limit 都先列 `止损级别 / 候选锚 / anchor / buffer`，再算 `SL`。空单 `SL=anchor+buffer`，多单 `SL=anchor-buffer`；报价精度需要取整时只能向结构外取整。成交后不再给取消/失效线。到管理位减仓；若移损，只能移到新确认结构外加 buffer，不能直接移到 entry。
 
-**输出合同（硬规则）**：live 禁止用主观判定词代替订单条件。pending 计划必须给全 **TF、事件类型、冻结价、触发价、硬损、有效根数、撤单价**；市价计划必须给全 **TF、事件类型、冻结价、现价、确认 K 区间、硬损、管理位、主目标**。缺字段 = 非法输出。形态强弱只能写在解释里，永不构成放行条件（`signal_bar_quality` 零结果，07-11）。
+**输出合同（硬规则）**：live 禁止用主观判定词代替订单条件。pending 计划必须给全 **TF、事件类型、冻结价、触发价、止损级别、候选锚、anchor、buffer、硬损、有效根数、撤单价**；市价计划必须给全 **TF、事件类型、冻结价、现价、确认 K 区间、止损级别、候选锚、anchor、buffer、硬损、管理位、主目标**。缺字段 = 非法输出。形态强弱只能写在解释里，永不构成放行条件（`signal_bar_quality` 零结果，07-11）。
 
 **回测 limit 与 CE 的明码标价（2026-07-12 两份 M5 重放，见 execution-gates 证据表）**：
 - **破位价回测 limit**：总样本成交率约 80%，成交后胜率较低并有 8-12% missed alpha；不同切片有小幅好坏，均未达到 0.15R 改规则门槛。它买到的是不追价和纸面 RR，不是期望优势。可用，但**cisd-only 事件不给此选项**。注意：limit 挂在破位价上时「收盘穿回撤单」条款多数情况下空转——价格收回去之前通常先成交。

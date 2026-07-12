@@ -112,7 +112,7 @@ Division of labor phrase for live Chinese when needed: `触发我可以直接拉
 User early entry / self-tightened stop inside structure / widened stop after fill / missed pending converted to market chase:
 
 1. One sentence naming the deviation + historical cost.
-2. Correction options (cancel & re-place / restore structural stop while cutting size to keep original risk $).
+2. **Before fill:** cancel and re-place with the correct scope/anchor, recalculating size and RR. **After fill:** never restore a wider price stop; keep the initial hard stop while reducing, or close the old ticket. A wider structure requires flat first, then a newly sized ticket.
 3. Then manage. Silent takeover = collusion. If user insists, respect — but the cost was stated once.
 
 ### File-operation / position-operation isolation

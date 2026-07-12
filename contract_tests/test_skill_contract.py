@@ -38,13 +38,39 @@ class StopContractTests(unittest.TestCase):
             "multi-TF confluence may set stop beyond outermost HTF array edge",
             self.gates,
         )
+        self.assertNotIn(
+            "anchor=max(本次序列最高点, 止损侧未完成等高/旧高/POI上沿)",
+            self.ladder,
+        )
 
     def test_postfill_stop_cannot_widen(self):
         self.assertIn("成交后禁止扩损", self.skill)
         self.assertIn("initial hard stop", self.gates)
         self.assertIn("新票据", self.gates)
+        self.assertNotIn(
+            "restore structural stop while cutting size",
+            self.gates,
+        )
         self.assertIn("66.45 - 0.04 = 66.41", self.changelog)
         self.assertIn("66.31", self.changelog)
+
+    def test_pending_templates_lock_scope_candidates_and_arithmetic(self):
+        self.assertIn(
+            "pending 计划必须给全 **TF、事件类型、冻结价、触发价、止损级别、候选锚、anchor、buffer、硬损、有效根数、撤单价**",
+            self.ladder,
+        )
+        for marker in (
+            "For an unconfirmed new opportunity:",
+            "For a conditional order plan:",
+        ):
+            block = self.template.split(marker, 1)[1].split("```", 2)[1]
+            for required in ("止损级别", "候选锚", "anchor", "buffer", "硬损"):
+                self.assertIn(required, block)
+        hype_pending = self.template.split(
+            "Worked pending scope example:", 1
+        )[1].split("```", 2)[1]
+        for required in ("M15 结构损", "66.57", "0.0325", "66.53", "有效 6 根"):
+            self.assertIn(required, hype_pending)
 
     def test_skill_file_operations_do_not_mutate_position_state(self):
         self.assertIn("文件操作 ≠ 仓位操作", self.skill)

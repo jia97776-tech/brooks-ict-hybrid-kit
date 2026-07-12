@@ -4,9 +4,9 @@ Local HTTP scanner for Codex live-desk use.
 
 ## Data Source Rule
 
-- Crypto uses MEXC contract data.
-- Gold, silver, indices, and oil use MEXC contract data.
-- FX uses Gate TradFi data.
+- Crypto and supported US-stock perps prefer Bitget USDT-M futures, with MEXC fallback.
+- FX, metals, US indices, and oil prefer Bitget TradFi public kline data.
+- If Bitget TradFi is unavailable, the router falls back to the supported Gate/MEXC routes.
 
 ## Run
 
