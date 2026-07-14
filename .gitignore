@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.worktrees/
 
 trading_scanner_service/data/*
 !trading_scanner_service/data/.gitkeep
