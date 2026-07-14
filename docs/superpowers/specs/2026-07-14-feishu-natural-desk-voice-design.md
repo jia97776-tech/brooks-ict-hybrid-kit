@@ -135,6 +135,32 @@ Reduce `telegram_proxy/grok_upstream.py` to channel-specific instructions:
 
 Remove duplicated trade contracts that compete with or amplify the skill.
 
+### Pre-send response guard
+
+Add a deterministic Feishu response guard outside the skill. It does not make
+or change trading decisions. It only decides whether a generated answer is
+clear enough to send.
+
+For ordinary single-symbol trading follow-ups, reject replies that:
+
+- exceed five non-empty lines;
+- start without an explicit action;
+- contain Markdown tables, report headings, or separators;
+- expose hidden audit terms or blame labels;
+- combine a blocked candidate with an actionable entry price;
+- ask for an unnecessary reply at the end.
+
+On the first rejection, send Grok one rewrite request containing the exact
+violations and require the same trading conclusion in natural Chinese. Do not
+append a second analysis or refresh market data during this rewrite.
+
+If the rewritten answer still fails, do not send a potentially misleading
+entry or management instruction. Return a short message saying the reply did
+not pass the clarity check and ask the user to resend the current question.
+
+The guard is relaxed for explicit scan tables, complete plans, audits, and
+post-trade reviews. The underlying execution safety checks are never relaxed.
+
 ## Regression Tests
 
 Deterministic contract tests will verify:
@@ -147,6 +173,9 @@ Deterministic contract tests will verify:
 6. user-initiated entries are managed without exposing blame labels;
 7. the Grok prompt does not require trade-class labels or four-element reports on every reply;
 8. the Grok prompt requires first-sentence action and hidden internal terminology.
+9. an overlong or contradictory Grok reply triggers exactly one rewrite;
+10. a compliant reply is sent without a rewrite;
+11. a second failed reply is replaced by a short clarity-check fallback.
 
 The USDCHF exchange is the calibration fixture:
 
