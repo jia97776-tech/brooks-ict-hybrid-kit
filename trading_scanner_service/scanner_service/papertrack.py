@@ -51,6 +51,12 @@ def _load() -> list[dict]:
     return rows
 
 
+def recent_signals(limit: int = 100) -> list[dict]:
+    """Return the newest paper signals for the read-only HTTP endpoint."""
+    size = max(1, min(int(limit), 1000))
+    return _load()[-size:]
+
+
 def _write_all(rows: list[dict]) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     tmp = SIGNALS_FILE.with_suffix(".jsonl.tmp")

@@ -45,14 +45,16 @@ CRYPTO = {
     "ZEC": "ZEC_USDT",
     "TAO": "TAO_USDT",
     "WLD": "WLD_USDT",
-    # US stock perps on Bitget usdt-futures (pilot 2026-07-11, scan-only).
-    # 24/7 synthetic pricing off-RTH — desk rule: triggers only during US RTH.
+    # US stocks are normalized through the existing *_USDT canonical keys,
+    # then routed to Gate TradFi by GATE_TRADFI_NORMALIZED.
     "TSLA": "TSLA_USDT",
     "NVDA": "NVDA_USDT",
     "MSTR": "MSTR_USDT",
     "CRCL": "CRCL_USDT",
 }
 
+# Legacy canonical aliases retained for symbol normalization only. These names
+# do not select a MEXC data source; MarketDataRouter is Gate-only.
 MEXC_CFD = {
     "XAU": "XAU_USDT",
     "XAUUSD": "XAU_USDT",
@@ -83,12 +85,26 @@ GATE_TRADFI_CFD = {
     "SPX": "US500",
     "US500": "US500",
     "SP500": "US500",
+    # US Dollar Index on Gate TradFi (desk alias DXY → venue USIDX).
+    "DXY": "USIDX",
+    "USIDX": "USIDX",
+    "USDOLLAR": "USIDX",
+    "USDX": "USIDX",
 }
 
 GATE_TRADFI_NORMALIZED = {
     "XAU_USDT": "XAUUSD",
     "NAS100_USDT": "NAS100",
     "SPX500_USDT": "US500",
+    # Gate TradFi uses plain symbol names for these instruments.
+    "SILVER_USDT": "XAGUSD",
+    "US30_USDT": "US30",
+    "USOIL_USDT": "XTIUSD",
+    "TSLA_USDT": "TSLA",
+    "NVDA_USDT": "NVDA",
+    "MSTR_USDT": "MSTR",
+    "CRCL_USDT": "CRCL",
+    "USIDX": "DXY",
 }
 
 FX = {
@@ -104,53 +120,8 @@ FX = {
     "EURGBP",
 }
 
-# Bitget USDT-M futures (switched from MEXC for crypto+metals 2026-07-10, user request).
-# Coverage verified by probe: all 11 crypto + XAUUSDT/XAGUSDT are liquid; NDX100USDT
-# exists but prints flat zero-volume M1 bars (unusable for sweep detection) and there
-# is NO Bitget product for US500/US30/oil/FX — those stay on MEXC / Gate tradfi.
-BITGET = {sym: f"{sym}USDT" for sym in (
-    "BTC", "ETH", "BNB", "SOL", "XRP", "DOGE", "ADA", "AVAX", "LINK", "DOT",
-    "LTC", "BCH", "SUI", "HYPE", "PEPE", "ZEC", "TAO", "WLD",
-    "TSLA", "NVDA", "MSTR", "CRCL")}
-BITGET_NORMALIZED = {f"{sym}_USDT": f"{sym}USDT" for sym in BITGET}
-
-# Bitget TradFi (MT5 CFD venue) public kline API, discovered 2026-07-10 via the
-# web app's own XHR (getMoreKlineDataV2). Unauthenticated, 1000 bars/call,
-# steps 1m..1w, last bar ~45s fresh. Covers FX + metals + US indexes + oil
-# (WTI = USOUSD, Brent = UKOUSD). Undocumented endpoint — router falls back
-# to Gate/MEXC on any failure.
-BITGET_TRADFI = {
-    "XAU_USDT": "XAUUSD",
-    "SILVER_USDT": "XAGUSD",
-    "NAS100_USDT": "NAS100",
-    "SPX500_USDT": "US500",
-    "US30_USDT": "US30",
-    "USOIL_USDT": "USOUSD",  # WTI; Brent would be UKOUSD
-}
-BITGET_TRADFI.update({fx: fx for fx in (
-    "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "USDCAD", "AUDUSD", "NZDUSD")})
-
-BITGET_TRADFI_INTERVAL = {
-    "M1": "1m",
-    "M5": "5m",
-    "M15": "15m",
-    "M30": "30m",
-    "H1": "1h",
-    "H4": "4h",
-    "D1": "1d",
-    "W1": "1w",
-}
-
-BITGET_INTERVAL = {
-    "M1": "1m",
-    "M5": "5m",
-    "M15": "15m",
-    "M30": "30m",
-    "H1": "1H",
-    "H4": "4H",
-    "D1": "1D",
-    "W1": "1W",
-}
+# MEXC parsing code remains for historical backtest utilities, but the live
+# MarketDataRouter below uses Gate only and has no venue fallback.
 
 MEXC_INTERVAL = {
     "M1": "Min1",
@@ -198,6 +169,8 @@ def _compact(symbol: str) -> str:
 
 def normalize_symbol(symbol: str) -> str:
     compact = _compact(symbol)
+    if compact in ("DXY", "USIDX", "USDOLLAR", "USDX"):
+        return "DXY"
     if compact.endswith("USDT") and compact[:-4] in CRYPTO:
         return f"{compact[:-4]}_USDT"
     for normalized in MEXC_CFD.values():
@@ -209,6 +182,12 @@ def normalize_symbol(symbol: str) -> str:
         return MEXC_CFD[compact]
     if compact in FX:
         return compact
+    if compact in GATE_TRADFI_CFD:
+        # Canonical internal names for Gate TradFi (e.g. DXY already handled).
+        mapped = GATE_TRADFI_CFD[compact]
+        if mapped == "USIDX":
+            return "DXY"
+        return mapped if mapped in ("XAUUSD", "NAS100", "US500") else compact
     raise SourceError(f"unknown symbol: {symbol}")
 
 
@@ -219,6 +198,8 @@ def normalize_gate_tradfi_symbol(symbol: str) -> str:
     if compact in GATE_TRADFI_CFD:
         return GATE_TRADFI_CFD[compact]
     normalized = normalize_symbol(symbol)
+    if normalized == "DXY":
+        return "USIDX"
     if normalized in GATE_TRADFI_NORMALIZED:
         return GATE_TRADFI_NORMALIZED[normalized]
     return normalized
@@ -234,13 +215,16 @@ def normalize_timeframe(tf: str) -> str:
 
 def classify_symbol(symbol: str) -> str:
     normalized = normalize_symbol(symbol)
-    if normalized in BITGET_NORMALIZED:
-        return "bitget_mix"
-    if normalized in BITGET_TRADFI:
-        return "bitget_tradfi"
-    if normalized in FX or normalized in GATE_TRADFI_NORMALIZED:
+    # 2026-07-14: Bitget and MEXC both removed as data sources (user's
+    # explicit choice — single source of truth, no cross-venue spread
+    # surprises). FX + XAU/XAG/NAS100/US500/US30/oil + the 4 stock perps
+    # (TSLA/NVDA/MSTR/CRCL) + DXY (USIDX) route through Gate TradFi.
+    # Crypto → Gate futures.
+    if normalized == "DXY" or normalized in FX or normalized in GATE_TRADFI_NORMALIZED:
         return "gate_tradfi"
-    return "mexc_contract"
+    if normalized in CRYPTO.values():
+        return "gate_crypto"
+    return "unrouted"
 
 
 _RATE_LIMIT_CODES = {510}
@@ -324,96 +308,43 @@ class MexcContractClient:
         return bars
 
 
-class BitgetMixClient:
-    base_url = "https://api.bitget.com"
-
-    def _bitget_symbol(self, symbol: str) -> str:
-        normalized = normalize_symbol(symbol)
-        try:
-            return BITGET_NORMALIZED[normalized]
-        except KeyError as exc:
-            raise SourceError(f"symbol not on Bitget: {symbol}") from exc
+class GateCryptoClient:
+    # Gate.io USDT-M futures — verified live for all 17 tracked crypto symbols
+    # (2026-07-14). Stock perps (TSLA/NVDA/MSTR/CRCL) are NOT here; those have
+    # no Gate futures contract and route through GateTradFiClient instead.
+    base_url = "https://api.gateio.ws"
 
     def price(self, symbol: str) -> float:
-        bg = self._bitget_symbol(symbol)
-        params = urllib.parse.urlencode({"symbol": bg, "productType": "usdt-futures"})
-        payload = _json_get(f"{self.base_url}/api/v2/mix/market/ticker?{params}")
-        data = payload.get("data") if isinstance(payload, dict) else None
-        if isinstance(data, list) and data and "lastPr" in data[0]:
-            return float(data[0]["lastPr"])
-        raise SourceError(f"Bitget ticker missing price for {bg}: {payload}")
+        normalized = normalize_symbol(symbol)
+        params = urllib.parse.urlencode({"contract": normalized})
+        payload = _json_get(f"{self.base_url}/api/v4/futures/usdt/tickers?{params}")
+        if isinstance(payload, list) and payload and "last" in payload[0]:
+            return float(payload[0]["last"])
+        raise SourceError(f"Gate futures ticker missing price for {normalized}")
 
     def bars(self, symbol: str, tf: str, limit: int) -> list[Bar]:
-        bg = self._bitget_symbol(symbol)
+        normalized = normalize_symbol(symbol)
         normalized_tf = normalize_timeframe(tf)
-        interval = BITGET_INTERVAL.get(normalized_tf)
+        interval = GATE_INTERVAL.get(normalized_tf)
         if not interval:
-            raise SourceError(f"unsupported Bitget timeframe: {tf}")
+            raise SourceError(f"unsupported Gate timeframe: {tf}")
         params = urllib.parse.urlencode(
-            {"symbol": bg, "productType": "usdt-futures",
-             "granularity": interval, "limit": min(int(limit), 1000)})
-        payload = _json_get(f"{self.base_url}/api/v2/mix/market/candles?{params}")
-        rows = payload.get("data") if isinstance(payload, dict) else None
-        if not isinstance(rows, list):
-            raise SourceError(f"Bitget kline missing data for {bg}: {payload}")
+            {"contract": normalized, "interval": interval, "limit": min(int(limit), 1000)})
+        payload = _json_get(f"{self.base_url}/api/v4/futures/usdt/candlesticks?{params}")
+        if not isinstance(payload, list):
+            raise SourceError(f"Gate futures kline missing data for {normalized}: {payload}")
         bars = [
             Bar(
-                ts=int(int(row[0]) // 1000),  # Bitget returns ms; the stack runs on seconds
-                open=float(row[1]),
-                high=float(row[2]),
-                low=float(row[3]),
-                close=float(row[4]),
-                volume=float(row[5]) if len(row) > 5 else 0.0,
+                ts=int(row["t"]),
+                open=float(row["o"]),
+                high=float(row["h"]),
+                low=float(row["l"]),
+                close=float(row["c"]),
+                volume=float(row.get("v", 0.0)),
             )
-            for row in rows
+            for row in payload
         ]
         return sorted(bars, key=lambda bar: bar.ts)
-
-
-class BitgetTradFiClient:
-    base_url = "https://www.bitgettradfi.com"
-
-    def _tradfi_symbol(self, symbol: str) -> str:
-        normalized = normalize_symbol(symbol)
-        try:
-            return BITGET_TRADFI[normalized]
-        except KeyError as exc:
-            raise SourceError(f"symbol not on Bitget TradFi: {symbol}") from exc
-
-    def price(self, symbol: str) -> float:
-        bars = self.bars(symbol, "M1", 2)
-        if not bars:
-            raise SourceError(f"Bitget TradFi returned no price bars for {symbol}")
-        return bars[-1].close
-
-    def bars(self, symbol: str, tf: str, limit: int) -> list[Bar]:
-        tradfi = self._tradfi_symbol(symbol)
-        normalized_tf = normalize_timeframe(tf)
-        interval = BITGET_TRADFI_INTERVAL.get(normalized_tf)
-        if not interval:
-            raise SourceError(f"unsupported Bitget TradFi timeframe: {tf}")
-        params = urllib.parse.urlencode(
-            {"symbolId": tradfi, "kLineStep": interval, "kLineType": 5,
-             "endTime": int(time.time() * 1000)})
-        payload = _json_get(f"{self.base_url}/v1/kline/getMoreKlineDataV2?{params}")
-        if not isinstance(payload, dict) or payload.get("code") != "00000":
-            raise SourceError(f"Bitget TradFi kline error for {tradfi}: {payload}")
-        rows = payload.get("data")
-        if not isinstance(rows, list) or not rows:
-            raise SourceError(f"Bitget TradFi kline empty for {tradfi}")
-        bars = [
-            Bar(
-                ts=int(int(row[0]) // 1000),
-                open=float(row[1]),
-                high=float(row[2]),
-                low=float(row[3]),
-                close=float(row[4]),
-                volume=float(row[5]) if len(row) > 5 else 0.0,
-            )
-            for row in rows
-        ]
-        bars.sort(key=lambda bar: bar.ts)
-        return bars[-int(limit):]
 
 
 class GateTradFiClient:
@@ -454,51 +385,31 @@ class GateTradFiClient:
 
 
 class MarketDataRouter:
-    def __init__(self, mexc=None, gate_tradfi=None, bitget=None, bitget_tradfi=None):
-        self.mexc = mexc or MexcContractClient()
+    # 2026-07-14: Bitget AND MEXC removed — Gate only (TradFi + futures), no
+    # fallback. If Gate is down, price()/bars() raise SourceError instead of
+    # silently mixing in a different venue's quote (user's explicit choice:
+    # one source of truth, no cross-venue spread surprises).
+    def __init__(self, gate_tradfi=None, gate_crypto=None):
         self.gate_tradfi = gate_tradfi or GateTradFiClient()
-        self.bitget = bitget or BitgetMixClient()
-        self.bitget_tradfi = bitget_tradfi or BitgetTradFiClient()
-
-    def _fallback_for(self, normalized: str):
-        # pre-switch source: FX + NAS100/US500 lived on Gate, US30/metals on MEXC
-        if normalized in FX or normalized in GATE_TRADFI_NORMALIZED:
-            return self.gate_tradfi
-        return self.mexc
+        self.gate_crypto = gate_crypto or GateCryptoClient()
 
     def price(self, symbol: str) -> float:
         normalized = normalize_symbol(symbol)
         route = classify_symbol(symbol)
-        if route == "bitget_tradfi":
-            try:
-                return self.bitget_tradfi.price(normalized)
-            except SourceError:
-                return self._fallback_for(normalized).price(normalized)
         if route == "gate_tradfi":
             return self.gate_tradfi.price(normalized)
-        if route == "bitget_mix":
-            try:
-                return self.bitget.price(normalized)
-            except SourceError:
-                return self.mexc.price(normalized)  # keep the desk alive if Bitget hiccups
-        return self.mexc.price(normalized)
+        if route == "gate_crypto":
+            return self.gate_crypto.price(normalized)
+        raise SourceError(f"no data source configured for {symbol}")
 
     def bars(self, symbol: str, tf: str, limit: int = 120) -> list[Bar]:
         normalized = normalize_symbol(symbol)
         route = classify_symbol(symbol)
-        if route == "bitget_tradfi":
-            try:
-                return self.bitget_tradfi.bars(normalized, tf, limit)
-            except SourceError:
-                return self._fallback_for(normalized).bars(normalized, tf, limit)
         if route == "gate_tradfi":
             return self.gate_tradfi.bars(normalized, tf, limit)
-        if route == "bitget_mix":
-            try:
-                return self.bitget.bars(normalized, tf, limit)
-            except SourceError:
-                return self.mexc.bars(normalized, tf, limit)
-        return self.mexc.bars(normalized, tf, limit)
+        if route == "gate_crypto":
+            return self.gate_crypto.bars(normalized, tf, limit)
+        raise SourceError(f"no data source configured for {symbol}")
 
 
 def bars_to_dicts(bars: Iterable[Bar]) -> list[dict]:

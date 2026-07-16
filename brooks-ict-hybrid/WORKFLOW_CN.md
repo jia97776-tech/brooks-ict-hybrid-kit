@@ -1,7 +1,7 @@
 # Brooks + ICT 中文工作流
 
-> **LEGACY（2026-07-09）— 禁止作为 live 主脑加载。**
-> 权威合同：`SKILL.md` + `references/execution-gates.md` + `references/entry-ladder.md` + `references/live-desk-template.md`。
+> **LEGACY（2026-07-09）— 禁止作为 live 主脑加载。**  
+> 权威合同：`SKILL.md` + `references/execution-gates.md` + `references/entry-ladder.md` + `references/live-desk-template.md`。  
 > 本文件保留仅供历史对照；若与 SKILL 冲突，以 SKILL 为准。裁决用语请用 `能做/等触发/别追/管仓/没交易/missed alpha`，不要用本文件旧「五选一」覆盖新主干。
 
 这是给 Codex / AI Agent 使用的价格行为分析 skill（旧版融合链说明）。

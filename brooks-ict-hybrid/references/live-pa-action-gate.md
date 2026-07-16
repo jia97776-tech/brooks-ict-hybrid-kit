@@ -170,3 +170,4 @@ instead of three equal-looking take-profits.
 2. Reversal cooldown. While the previous plan is not invalidated on a close, do not issue a new plan. Do not flip to the opposite side within ~3 closed bars of the last plan unless a close confirmed the structure failure. One bar must never flip the desk.
 3. RR asymmetry. RR is computed on T1 and must clear the minimum on T1 alone. If RR is short: tighten the stop to a real structure or improve the entry — never widen the stop outward, never pull T1 closer, and never use T2 to justify a trade T1 cannot.
 4. Weak trigger bar fallback. If the trigger bar is a doji/outside bar, pre-write the next bar's trigger condition and re-anchor the stop to the tighter prior-bar extreme once triggered, instead of abandoning the idea.
+

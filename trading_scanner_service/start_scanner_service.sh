@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="/home/ubuntu/trading_scanner_service"
 LOG_FILE="/tmp/trading_scanner_service.log"
 HEALTH_URL="http://127.0.0.1:8001/healthz"
 

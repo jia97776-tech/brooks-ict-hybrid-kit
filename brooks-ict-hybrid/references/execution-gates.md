@@ -1,197 +1,176 @@
 # Execution Gates（给单 / 管仓硬门）
 
-Loaded with SKILL on every live give-plan or position-management answer.
-**Policy** below is binding. **Evidence snapshots** are dated and re-evaluable — they justify policy, they are not eternal truth.
+Loaded with SKILL on every live give-plan or position-management answer. 本文只写 policy；完整证据快照（数字+日期+复评条件）在 `execution-aids-evidence.md` §Execution-gates evidence——**引用具体数字必须查表，禁止凭记忆报数**。30 笔/类以下拒绝改规则；证据永不当「策略有 edge」引用。
 
-## Evidence snapshots（not proof of edge）
+## Policy digest（既定裁决一句话版）
 
-| Snapshot | As of | Note |
-| --- | --- | --- |
-| papertrack post-07-04: CONDITIONAL aggregate deeply negative; READY thin-sample slightly positive (e.g. CONDITIONAL ~635 trades large negative R sum; READY ~69 trades small positive) | 2026-07-09 | BTC-beta correlation; settlement assumptions; READY n thin. **Policy:** gate CONDITIONAL unless Ladder Tier1/2. Re-eval when per-class n≥100 or monthly papertrack. |
-| Replay: POI deep limit vs wait-for-M15/H4 confirm ~+0.6R net for this user | 2026-07-08 | Single-desk replay, not universal alpha. |
-| Channel first fade attempt fails often (desk heuristic >80% vs micro-channel) | ongoing | Cycle gate reason — not a published backtest. |
-| ~~Loss audit 07-04~09: ~76% of losers had ≥1R MFE — supports +1R partial as rescue~~ **RETRACTED 2026-07-10**: that number came from papertrack's buggy `mfe_r` (fill-bar extreme counted as open profit). | 2026-07-10 | Strict replay: only **19%** of M15 machine-signal losers ever saw +1R. +1R partial remains binding for **legal triggered entries** (journal 35 trades +1.76R avg with it); it is NOT a rescue for bad entries. |
-| **Machine-signal adverse selection** (strict replay, 1889 signals, 97.5% agreement with papertrack): M15 no-fill → 89% ran to DOL anyway (50% missed by ≤0.25R); M15 filled → 65% stopped on the **same bar** as the fill; post-stop 98% returned to entry, 58% still hit original DOL. Direction/DOL engine fine; deep-limit entry geometry broken. H4 healthier on every metric but raw R still negative (n=124). | 2026-07-10 | **Policy:** raw scanner POI never quoted as a live pending order; entries via LTF trigger or desk-revalidated level only. Diagnosis-level evidence; parameter tuning still needs longer sample. |
-| **MSS+CISD double-confirm is not an entry edge:** strict M15 slice win rate 6.5% vs MSS-only 11.3%; CISD-only was the worst slice at −0.388R avg. | 2026-07-10 | **Policy:** MSS+CISD may establish direction/structure maturity, but never supplies entry permission by itself. Execution still requires a legal Ladder Tier1/2 or another named PA entry path; CISD-only is not pushed. |
-| **Mechanical trigger ≈ zero edge** (deep replay 2026-07-11: 15955 M5 three-step/continuation triggers off M15 sweep parents, 24 symbols, 5 months, ~2512 independent symbol-days): gross expectancy ≈ 0R every single month; NO mechanical quality gate (D1-align / HTF confluence / session / RR / freshness / barbwire / climax / micro-channel / signal-bar grade / second-entry / failed-trigger early exit) moved avgR by ≥0.15R; stacked A/S gate combos stayed ≈0 (win rate ~30%). Also mildly refuted: "strong signal bar better" and "failed-trigger early exit saves money" (31% false kills). | 2026-07-11 | **Policy:** trigger mechanics are **legality, not edge**. A legal sequence only earns the right to be judged; the alpha layer is the human/desk read (journal 35 trades +1.76R vs machine ≈0). Never let mechanical gates auto-promote a push to "A/S 单"; A/S is a judgment verdict, not a filter output. Fees/slippage make unfiltered mechanical triggering strictly negative. Live sensors (`signal_bar_quality` / `hl_count` / SMT / env flags) are on-demand evidence for the desk verdict only — never auto gates. |
-| Papertrack `mfe_r` accounting fixed 2026-07-10 (fill bar + stop bar excluded). Rows resolved before that date carry inflated MFE. | 2026-07-10 | Do not mix pre/post-fix mfe_r in one statistic. |
-| **HTF confluence does not upgrade** (H4 signal replay 5.5 months): signals overlapping a D1 array were **worse** (−0.047 vs +0.112 without, n=257/77 — only result past significance). LTF layer same verdict (deep replay 2026-07-11, gate G2): M15/M5-level array confluence on triggers moved avgR by only **Δ+0.01R** — indistinguishable from none. | 2026-07-11 | **Policy:** multi-TF confluence may define stacked-zone invalidation and target confluence, but it enters the stop formula only when the declared stop scope/thesis requires that entire layer to hold. Never auto-widen, size-up, grade-up, or lower the trigger bar. Applies at every TF pair tested (D1∩H4 and M15/M5). |
-| **FVG/iFVG CE limits show no stable improvement over the confirmation-bar stop** (M5 replay `backtest_fvg_ifvg_entries.md`, mss/cisd/both, 24 symbols, ~4 months): aggregate CE expectancy was slightly negative and most soft-exit variants were no better; isolated slice improvements stayed far below the 0.15R rule-change threshold. | 2026-07-12 | **Policy:** FVG/iFVG CE is an **optional price-improvement order only** — never "equal trigger", never auto-`mgmt2r`, never an entry without the completed sequence. Soft-exit-on-array-close-through is not a default. |
-| **Broken-structure retest limit (方案B) shows no stable advantage over event_stop** (`backtest_struct_retest_limit.md`, same engine but valid-order sample counts differ): aggregate fill ~80%, lower win/fill, and 8-12% missed alpha; some slices were marginally better and others worse, all well below 0.15R/signal. CISD aggregate was clearly worse. Cancel-on-close-back is mostly ineffective when the limit sits at the broken level because price normally fills before it can close back. | 2026-07-12 | **Policy:** retest limit is a legal "confirmed but not chasing" alternative with an observed small opportunity cost, not a proven fixed cost; do not offer it on cisd-only events. Default expression remains event_stop; no tested expression is an edge. |
-
-Never quote these as “strategy has edge.” Refuse rule-change claims under ~30 trades per class.
+- CONDITIONAL 聚合深负、READY 薄样本微正 → CONDITIONAL 只放行 Ladder Tier1/2。
+- 扫后深限 vs 等 M15/H4 确认 ≈ +0.6R（单桌重放）→ Tier 1 合法。
+- 机器 POI 逆向选择（没接到 89% 照到 DOL；接到 65% 同 bar 打损）→ scanner POI 永不直接当挂单。
+- MSS+CISD 双确认非入场 edge；CISD-only 最差切片 → 只证方向成熟度，CISD-only 不推。
+- 机械触发 ≈ 零 edge（15955 触发无任何门 ≥0.15R）→ 触发力学=合法性；A/S 是裁决不是过滤器输出；传感器只做现场证据，永不自动放行。
+- 多 TF confluence 不升级（D1 重合反而更差）→ 重合只用于叠层失效/目标 confluence；禁自动放宽/加仓/升级/降门槛。
+- FVG/iFVG CE 无稳定改善 → 仅可选改善价；数组收穿软离场非默认。
+- 破位价回测 limit 无稳定优势、有 missed 成本 → 合法「不追价」替代非 edge；cisd-only 不给。
+- +1R 必减对合法触发单成立（journal +1.76R）；「76% 亏单曾 ≥1R」已撤回（mfe bug，严格口径 19%）——+1R 减是纪律，不是坏单救生圈。
+- mfe_r 2026-07-10 前的行虚高，禁与修复后混算。
 
 ---
 
-## 1. CONDITIONAL_READY Execution Gate
+## 1. CONDITIONAL_READY 执行门
 
-When scanner is CONDITIONAL_READY missing MSS/CISD:
+缺 MSS/CISD 时**默认只给等触发计划**，除非 Ladder 合法路径已在生 bar 上完成：
 
-**Default: no “click now” entry. Only 等触发 plan — unless a legal Ladder path is already complete on raw bars.**
+1. **合法路径仅两条**（`entry-ladder.md`）：Tier 1（四前提齐+结构宽损；scanner `entry_ref` 原样不算，须桌面生 bar 复核）或 Tier 2（完整序列；用户屏读或桌面自拉 M1/M5 均合法）。影线和视觉印象不触发订单。两路都无 → 只等触发。CISD-only：不推、不主动给计划。（07-06 CHF/AUD 是降层，不是这两条路径的失败。）
+2. **双路径触发**：合同全文见 SKILL「双路径入场」+ ladder「双路径合同」。要点：`pushable=false`/`confirm_bar=null` 只说明机器无可引用触发；非 `chase`/`stale_data` 必须尝试路径 B；**禁止把审计 trigger 报成挂单价**。
+3. **止损**：SKILL「Stop Triple Constraint」全文适用。补充：背景 confluence / 远端地图位不进止损公式，除非越过它否定本笔 thesis；非扫极锚必须是**确认结构**——禁噪音中段影线、禁为凑 R 收紧的 stale scanner SL。
+4. **管理距离**：管理位（减仓/BE）距入场 <1×ATR → 目标太近不做。
+5. **连亏熔断**：日累亏 ≥2R 或连续 3 损 → 只给 READY+双对齐+`rr_now≥3`；否则「没有 A+ 的单，建议收工」。禁降标准复仇。
+6. **宁可没交易，不降级硬凑**。「没有符合条件的」是合法完整回答。
 
-1. **Legal paths only** (`entry-ladder.md`):
-   - Tier 1: post-sweep deep limit, all four preconditions, structural wide stop — **level must be user/desk-revalidated on raw bars; raw scanner `entry_ref` never qualifies** (2026-07-10 adverse-selection audit); or
-   - Tier 2: full M1/M5 sequence (trade beyond frozen liquidity → same-TF close back inside → close through event-defined frozen structure price) — trigger may be read by the user on-screen or by the desk pulling M1/M5 directly.
-   Wicks and visual impressions do not trigger orders. Neither path → 等触发 only.
-   CISD-only candidates (no MSS): do not push, do not volunteer plans — worst papertrack slice (−0.388R avg).
-   07-06 CHF/AUD losses were demotions (no deep limit+structural stop, no full sequence) — not failures of these two paths.
+违反任一条 = 执行偏差，发生时点名。
 
-2. **Stop scope + triple constraint** (also in SKILL): first lock `M1/M5 触发损`, `M15 结构损`, or `H4 POI 整层损`. Enumerate every relevant 候选锚 inside that scope, choose the outermost one, then add buffer. Short anchor = the maximum relevant sequence/confirmed-structure high, unfinished equal/old high, and POI edge that this thesis must hold; long is mirrored. 背景 confluence or a remote map level does not enter the formula unless crossing it invalidates the declared trade. SL must also satisfy `|entry−SL| ≥ 0.5×ATR(entry TF)` (M1 whitelist scalp excepted). When not using the sweep extreme, the structural candidate must be confirmed — never a mid-noise wick or stale scanner SL tightened for R.
-
-3. **Management distance:** if management level (partial/BE) is `< 1×ATR` from entry, 目标太近不做.
-
-4. **Loss streak fuse:** day cumulative loss ≥ 2R **or** ≥ 3 consecutive stops → only offer READY + dual alignment + `rr_now ≥ 3`. Else: 没有 A+ 的单，建议收工. No standard-lowering to revenge trade.
-
-5. **Prefer no trade over demotion.** “没有符合条件的” is a legal full answer.
-
-Violation of any item = execution deviation; name it when it occurs.
-
-### Unified language (anti-conflict)
+### 统一话术（防冲突）
 
 | Say | Do not say |
 | --- | --- |
-| 事件未确认：等触发 + full pending plan | 无确认市价 / 紧损赌一下 |
+| 事件未确认：等触发 + 完整 pending 计划 | 无确认市价 / 紧损赌一下 |
 | M1/M5 事件已确认且市价客观条件全过：现在市价 + anchor/buffer/SL + 管理/目标 | 明明可市价却机械降成 event stop |
 | 已确认但任一市价条件不过：确认 K 极值外 event stop 或别追 | 主观反抽区 / 第二入口 |
 | 挂深位限价（Tier1 内心满足时） | CONDITIONAL 当 READY 喊 |
-| missed alpha / 别追 | 慢审把已走出来的快setup改成 REJECT |
+| missed alpha / 别追 | 慢审把已走出来的快 setup 改成 REJECT |
 
-`conditional plan` **means** the pending 等触发 plan, **not** market entry permission. But once the M1/M5 event is confirmed, it is no longer merely conditional: apply the market-first contract, then fall back to event stop only when a market condition fails.
-
----
-
-## 2. Pre-trade five checks（给单前五查）
-
-Before any entry plan is spoken, run all five **internally**. Speak desk Chinese; do not dump checklist labels unless 复盘.
-
-1. **Layer:** READY or CONDITIONAL? Ladder tier? CONDITIONAL only Tier1/2 paths.
-2. **Environment:** red news ±30min no entry; 30–60min after red print no M5-tier triggers (ETH 07-08 FOMC minutes); weekend/holiday thin tape → raise bar. For unscheduled geopolitical/headline shocks, pause new market/breakout orders until the first M15 close. Existing deep limits may stay unchanged or be cancelled; never move the stop, add size, or flip direction from the headline alone. Reclassify only after price shows noise / structural shock / multi-ATR breakdown.
-3. **Beta:** any alt crypto long → BTC check (section 4).
-4. **Fuse state:** day loss count + same-structure stop count (section 5).
-5. **Stop exam:** declare stop scope, then pass the triple constraint. (a) Enumerate 候选锚 and place the stop beyond the outermost relevant structure extreme by at least 0.25×ATR/spread pad, (b) distance ≥0.5×entry-TF ATR except whitelisted M1 scalp, and (c) beyond unfinished stop-side liquidity that belongs to the declared scope and must be processed for this thesis. A background confluence level does not force an H4-wide stop. A relevant pool omitted from the list invalidates the plan even when (a) and (b) pass. If scope/anchors change before fill, cancel and 重新计算 entry / size / management / RR. If the sweep has not printed its true extreme, do not prewrite a tight fade stop. High R comes from entry; cut size or pass instead of shrinking SL.
+`conditional plan` = 等触发 pending 计划，**不是**市价许可；但 M1/M5 事件一旦确认即走 market-first 合同，市价条件不过才回落 event stop。
 
 ---
 
-## 3. Position management：不催平仓
+## 2. 给单前五查
 
-While first stop has not traded:
+给任何入场计划前**内部**跑完五查；对外说桌面中文，不倒 checklist 标签（复盘除外）。
 
-1. User says 半死不活 / 不像要走 / 上不去了 → answer 止损没到就拿着; **do not offer “just close” as the main option.**
-2. Suggest discretionary exit only when **M5 close** breaks key structure; wick alone does not count.
-3. “磨时间” is not an exit reason. H4 POI rejects are slow by design.
-4. BE stop on confirmed structure (M5 swing), **never at entry price.**
-5. **Never widen the initial hard stop after fill.** Long: any new SL below the initial hard stop is wider risk; short: any new SL above it is wider risk. The initial hard stop may stay or move toward profit behind newly confirmed structure. If the original stop scope or anchor audit was wrong, keep the initial stop while reducing size, or close the old ticket; a wider structural stop requires a 新票据 with newly sized risk. Cutting size does not legalize moving the price stop farther away.
-
-### +1R harvest law
-
-When MFE hits management level **or** +1R (whichever first) → **must reduce size**.
-Move stop only to **confirmed structure**.
-Full-size hold watching giveback and aggressive non-structural BE are the same leak’s two faces — answer is 减仓锁利 + 结构移损, not either/or.
-
-**LTF tight-stop variant（2026-07-10d，用户裁定）**：Tier 2 LTF 触发单（损锚 M1/M5 触发 bar 极值外，风险距离明显小于一根 M15 波幅）+1R 只是噪音距离，在那里减半会把紧损入场的不对称卖在起点。此类单**允许把首减写在 +2R 或第一个对手 M15 结构位（先到者）**，条件全部满足才合法：
-
-1. **入场时写死**在计划里（`mgmt2r`）；持仓中途禁止从 +1R 改成 2R——那是扛单不是方案。
-2. **+1R 到达后损必须开始跟结构**（M1/M5 确认摆动 + buffer，逐级上提）：不减仓，但绝不允许原始损裸奔让 +1R 的单原路打回。
-3. `counter_htf` / 逆 D1 单**不适用**——仍然 +1R/近端必减，无 runner。
-4. journal note 标 `mgmt2r`，与默认 +1R 方案分池攒样本；两边都不足 ~30 笔前不下「哪个更好」结论。
-
-默认（M15 结构损、深位限价、非紧损）单维持 +1R/管理位必减不变。
-
-### Three brakes（触发归 LTF 生 bar，刹车归桌面 — 2026-07-10b）
-
-Entry triggers may come from the user on-screen **or from the desk pulling M1/M5 raw bars directly** — both legal; what is banned is signal-gambling market entries and raw scanner POI quoted as an order. Once a legal-sequence fill is reported, desk **owns management**, not second-guessing the entry:
-
-1. **+1R / 管理位必减** — whichever first; partial off, never full-size hope. LTF tight-stop entries may run the pre-written `mgmt2r` scheme instead (see harvest law variant) — but only if it was written at entry, and structure-trailing starts at +1R.
-2. **损只移到已确认结构** — M5+ swing / failure high-low + buffer; never entry-price BE; never round-number fake BE (case 15 US500). After ~+2R open, unmoved original stop = case 11 failure mode.
-3. **同区同级两损封盘** — third try only after structure upgrade (section 5). ETH 1785 7/5 three-try = fuse violation sample.
-
-Division of labor phrase for live Chinese when needed: `触发我可以直接拉 M1/M5 帮你盯；减仓、移损、同区熔断照样我管。`
-
-### Deviation protocol
-
-User early entry / self-tightened stop inside structure / widened stop after fill / missed pending converted to market chase:
-
-1. One sentence naming the deviation + historical cost.
-2. **Before fill:** cancel and re-place with the correct scope/anchor, recalculating size and RR. **After fill:** never restore a wider price stop; keep the initial hard stop while reducing, or close the old ticket. A wider structure requires flat first, then a newly sized ticket.
-3. Then manage. Silent takeover = collusion. If user insists, respect — but the cost was stated once.
-
-### File-operation / position-operation isolation
-
-`修 skill`, `优化止损逻辑`, `撤销这个修改`, and similar wording target files unless the user also gives an explicit symbol + position action. A file edit, revert, validation, or Git operation **不得改变当前仓位**, pending order, hard stop, targets, or journal state. Do not interpret “撤销 skill 修改” as close/cancel, and do not interpret “修止损逻辑” as move a live stop. If both file and position referents remain plausible, ask one short clarification before mutating either state.
-
-**Not a deviation:** user taking a complete Tier 2 sequence on-screen while desk had only quoted a Tier 1 deep limit — that is the preferred fill path; switch to three-brake management immediately.
-
-### Chase-repair contract（已追价 — 2026-07-11g，DOGE）
-
-When user already market-chased / filled worse than the desk plan:
-
-1. Name it: `追价样本，RR 已压缩`.
-2. **One** repair add only — at the **original planned trigger zone**, not further chase.
-3. After add: combined risk ≤ original 1R, combined size ≤ planned size; re-quote stop / mgmt / target / net RR.
-4. Second chase or revenge add → only reduce/exit; no new plan.
-5. journal flags: `chased_entry` + `repaired_by_planned_add` when repair used.
-
-### Management scheme lock（2026-07-11g，SOL）
-
-At entry (or first fill confirm), write exactly one of:
-
-- `管理方案：+1R减（本单锁定）` (default), or
-- `管理方案：mgmt2r（本单锁定）` (LTF tight-stop only; see harvest variant).
-
-Mid-trade scheme change is **illegal** (including “let’s try 2R first partial”). User wants switch → flat then new ticket; flag `midtrade_scheme_change`. Management replies only execute the locked scheme + four elements.
-
-### Friday flat vs fear exit（2026-07-11g，USDCHF）
-
-Non-crypto flat before Friday close = **correct** execution. Live language: 周五到点平仓，做对了.
-journal: `friday_flat` (legal) ≠ `fear_early_exit` / do not use `early_manual_exit_before_target` for Friday rule closes.
-
-### Multi-desk state protocol（Codex / Grok / Fable / Claude / a_watch）
-
-**Entry/fill-confirmation channel = main desk.** It owns the single live entry, hard stop, soft-exit TF, management scheme, and target ladder. Other desks may restate or audit, but must refetch price + M1/M5/M15/H4 before challenging a live plan; relayed text is not evidence.
-
-If an audit finds a hard error (cycle-state violation, stop inside a liquidity pool, stale data), issue an explicit state transition: `old plan invalid -> cancel order`. After the user confirms cancellation, all desks treat state as `flat / no pending`; the old plan cannot silently return. Any replacement must explicitly say the old revision is void and the new revision is active. Soft exit names M5 or M15 close through level; wick does not count. One journal row only with combined source tags — never duplicate then merge.
-
-### Pending-order continuity guard
-
-Before issuing any new plan, inspect the previous order against all closed bars since it was placed:
-
-1. **Untouched + still valid:** preserve it. A fresh analysis may restate or cancel it, but may not create a nearby duplicate or opposite order.
-2. **Entry touched, fill unknown:** state `触价待确认`, ask fill/average/slippage, and freeze new orders. Price touching a trigger is evidence of possible execution, not proof of broker fill.
-3. **Fill confirmed:** switch to position management and cancel the sibling order from a two-route plan.
-4. **Unfilled + stale/invalid:** cancel only for an observable reason — cycle/direction changed, entry structure closed through, target consumed, event/session window ended, or explicit expiry elapsed. Do not use PA_Agent's fixed three-bar timeout across all TFs; event-stop freshness and HTF deep-limit validity age differently.
-5. **Revision:** old order first becomes `cancelled/invalidated`; only then may the replacement become active. If platform cancellation is unconfirmed, report `撤单待确认` and do not stack risk.
-
-### Venue friction on RR（非加密 Bitget TradFi）
-
-Quote plan RR **after** net cost (~1 pip round-trip order-of-magnitude on ECN; follow user venue). Stop buffer = `max(0.25×ATR, spread pad)`. TP limit slightly inside theoretical target. Always state realistic take-home band, not only textbook RR.
+1. **层级**：READY 还是 CONDITIONAL？Ladder 哪层？CONDITIONAL 只认 Tier1/2。
+2. **环境**：红字新闻 ±30min 不开；红字落地后 30–60min 不给 M5 级触发（ETH 07-08 FOMC 纪要）；周末/假日薄流动性提标准。突发地缘/头条：暂停新市价/突破单直到第一根 M15 收盘；已挂深限可保留或撤，**禁止**仅凭头条移损/加仓/翻向；只有价格走出噪音/结构冲击/多 ATR 破位后才重分类。
+3. **Beta**：alt 多头 → 先过 BTC 查（§4）。
+4. **熔断状态**：日亏计数 + 同结构区止损计数（§5）。
+5. **止损体检**：先报级别，再过三约束（公式见 SKILL）。补充：①级别内**所有**相关候选锚必须列全——漏一个池即使 (a)(b) 过也判计划无效；②背景 confluence 不强迫 H4 宽损；③成交前级别/锚变了 → 撤单重算入场/仓位/管理/RR；④扫荡还没打出真实极值 → 不预写紧的 fade 损。高 R 靠入场，做不到就缩仓或不做，不靠缩 SL。
 
 ---
 
-## 4. Crypto BTC pre-check
+## 3. 持仓管理：不催平仓
 
-Before any **alt long**:
+第一止损没被打到时：
 
-1. Pull BTC M15 + H4 last ~6 bars: imminent low-sweep / dump risk (pinned on liquidity, H4 consecutive reds, weak structure)?
-2. BTC unhealthy → no alt long, or explicit: BTC 结构有下杀风险，alt 多头可能被 beta 洗掉.
-3. Alt longs right after BTC dump = one BTC-beta event, not independent samples. Wait for BTC stabilize before counting new alt candidates.
+1. 用户说 半死不活/不像要走/上不去了 → 回「止损没到就拿着」；**不把“干脆平了”当主选项**。
+2. 裁量离场只在 **M5 收盘**破关键结构时建议；影线不算。
+3. 「磨时间」不是离场理由。H4 POI 的拒绝本来就慢。
+4. 保本损放**确认结构**（M5 swing）外，**永不放入场价**。
+5. **成交后禁扩损**：多单任何低于初始硬损的新 SL、空单任何高于的，都算扩损。发现级别/锚选错 → 保原损减仓，或平旧票；更宽结构损 = 先平再开新票按新距离定仓。减仓不能使「把价格损移远」合法化。
+6. **成交后不得新增软离场**：收盘式软离场只在入场前锁定才有约束力。新结构可以支持一个新的当前动作，但不得把它改写成「入场时就有的规则」。
+
+### +1R 收割铁律
+
+MFE 到管理位**或** +1R（先到者）→ **必须减仓**；移损只到**确认结构**。满仓死扛看回吐、激进无结构 BE，是同一个漏洞的两张脸——答案是 减仓锁利+结构移损，不是二选一。
+
+**mgmt2r 变体（2026-07-10d 用户裁定）**：Tier 2 LTF 紧损触发单（损锚 M1/M5 触发 bar 极值外、风险距离明显小于一根 M15 波幅），+1R 只是噪音距离——允许首减写 **+2R 或第一个对手 M15 结构位（先到者）**，四条全满足才合法：①入场时写死 `mgmt2r`，中途从 +1R 改 2R = 扛单非方案；②+1R 到达后损必须开始跟结构（M1/M5 确认摆动+buffer 逐级上提），绝不让原始损裸奔被原路打回；③`counter_htf`/逆 D1 不适用——仍 +1R/近端必减、无 runner；④journal 标 `mgmt2r` 分池，两边不足 ~30 笔前不比优劣。默认单（M15 结构损/深限/非紧损）维持 +1R 必减。
+
+### Three brakes（触发归 LTF 生 bar，刹车归桌面）
+
+触发可由用户屏读**或桌面自拉 M1/M5 生 bar**——都合法；禁的是赌信号市价和 scanner POI 直挂。合法序列成交上报后，桌面**只管仓，不回头质疑入场**：
+
+1. **+1R/管理位必减**（先到者；`mgmt2r` 单按锁定方案，+1R 起结构跟损）。
+2. **损只移到已确认结构**——M5+ swing/failure 高低点+buffer；禁入场价 BE、禁整数假 BE（case 15 US500）；~+2R 浮盈后原始损没动 = case 11 失败模式。**确认结构 ≠ 等高低货架**——见下移损锚三问。
+3. **同区同级两损封盘**——第三次只认结构升级（§5；ETH 1785 7/5 三连 = 熔断违规样本）。
+
+分工话术（需要时）：`触发我可以直接拉 M1/M5 帮你盯；减仓、移损、同区熔断照样我管。`
+
+### 移损锚三问（2026-07-12k，HYPE 用户裁定）
+
++1R/减仓后要上提硬损时，**先答三问再报价**：
+
+1. **确认了吗？** 低/高点打出后价格离开并建立 HL/LH 序列。**拒绝**只是等低/等高货架的锚（同一层 3–4+ 次回踩 = 正常回调第一个被扫的流动性）。
+2. **否定 thesis 吗？** 破锚必须杀死本笔跟随逻辑；路边常被影线扫的回调货架 = 非法硬损锚。
+3. **buffer 在结构外吗？** `SL = anchor ± max(0.25×ATR, 点差垫)`；宁可稍宽，不为多锁几个 tick 把损塞货架底下。
+
+| 合法移损锚 | 非法移损锚 |
+| --- | --- |
+| 发起当前 HL/LH 序列的 double-tap/确认摆动 | 仍在被回踩的等低/等高货架 |
+| 序列延续后的新确认 HL/LH | 「离价最近的低点」只因为近 |
+| 与止损级别同 TF（M5 管 M5 级；M1 噪音不抬 M15 级损） | 为锁 R 收紧进货架 |
+| 主目标后：最近确认结构+buffer | 影线穿当破位（软离场只认收盘穿） |
+
+**每次移损必报**：`锚价 + bar 时间/TF + 为何算确认 + buffer 算法 + 最终 SL`——缺任一字段 = 非法移损，不执行。
+
+**多桌分歧**：先比是否同一锚 bar；不同锚 → 重跑三问，**结构底/顶赢，货架输**，只留一个 SL。用户已选的锚过①②③ → 桌面跟用户，不再塞更紧的货架损。
+
+HYPE 07-12 样本：合法 = M5 双低 66.938/66.943 + buffer → **66.87**；非法 = 等低货架 ~67.03。口诀：`移损跟确认结构，不跟最近货架；锁利用减仓，不靠把损塞进等低下面。` 校准：`live-desk-calibration.md` case 18。
+
+### 偏差协议
+
+用户提前进/自行收紧结构内损/成交后扩损/错过挂单改市价追：
+
+1. 平实点名一次，然后管**实际成交**；行动优先于追责。
+2. **成交前**：撤单按正确级别/锚重挂，重算仓位与 RR。**成交后**：绝不恢复更宽的价格损；保原损减仓或平旧票；更宽结构 = 先 flat 再开新票按新距离定仓。
+3. 然后管仓。不追认入场，不事后补造软离场。
+
+**不算偏差**：桌面只报了 Tier 1 深限、用户屏前自己做完了完整 Tier 2 序列——那是更优成交路径，立即切三刹车管理。
+
+### 文件操作 / 仓位操作隔离
+
+`修 skill`、`优化止损逻辑`、`撤销这个修改` 等指向**文件**，除非用户同时给出明确品种+仓位动作。文件编辑/回滚/验证/Git 操作**不得改变**当前仓位、挂单、硬损、目标或 journal 状态。「撤销 skill 修改」≠ 平仓撤单；「修止损逻辑」≠ 移实盘损。两种指代都说得通时，先一句确认再动任一状态。
+
+### 追价修复合同（2026-07-11g，DOGE）
+
+用户已市价追/成交价比计划差：①点名 `追价样本，RR 已压缩`；②**仅一次**修复加仓——在**原计划触发区**，不再往前追；③加后合并风险 ≤ 原 1R、合并仓 ≤ 计划仓，当场重报损/管理/目标/净 RR；④二次追或复仇加 → 只减/只出，无新计划；⑤journal 标 `chased_entry`（+`repaired_by_planned_add`）。
+
+### 管理方案锁定（2026-07-11g，SOL）
+
+入场（或首次确认成交）时写死一个：`管理方案：+1R减（本单锁定）`（默认）或 `管理方案：mgmt2r（本单锁定）`（仅 LTF 紧损）。中途改方案**非法**（含「先试试 2R 减」）；用户要换 → 平仓开新票，标 `midtrade_scheme_change`。管仓回复只执行锁定方案+四要素。
+
+### 周五平仓 vs 恐惧早走（2026-07-11g，USDCHF）
+
+非加密周五闭盘前平 = **正确执行**，话术「周五到点平仓，做对了」。journal `friday_flat`（合法）≠ `fear_early_exit`；周五规则平仓不得记 `early_manual_exit_before_target`。
+
+### 多桌状态协议（Codex / Grok / Fable / Claude / a_watch）
+
+**开仓/成交确认通道 = 主桌**，独占唯一的 entry、硬损、软离场 TF、管理方案、目标梯。其它桌可复述/审计，但挑战 live 计划前必须自己重拉价+M1/M5/M15/H4；转述文字不是证据。审计发现硬错误（周期态违规/损在流动性池里/数据 stale）→ 显式状态迁移：`旧计划作废 → 撤单`；用户确认撤单后全桌按 `flat/无挂单` 处理，旧计划不得悄悄复活。任何替换必须明说旧版作废、新版生效。软离场必须点名 M5 或 M15 收盘；影线不算。journal 只记一行（合并 source 标签），禁止先重复再合并。
+
+### 挂单延续守卫
+
+出任何新计划前，先对照上次挂单与其后所有已收 bar：
+
+1. **未触且仍有效**：保留。新分析可复述或撤销它，但不得在旁边挂重复/反向单。
+2. **触价成交未知**：报 `触价待确认`，问成交/均价/滑点，冻结新单。触价是可能成交的证据，不是券商成交的证明。
+3. **确认成交**：转管仓；撤双路计划的兄弟单。
+4. **未成交但 stale/失效**：只因可观察原因撤——周期/方向变、入场结构被收盘穿、目标被消耗、事件/时段窗结束、显式到期。不得把固定「3 根超时」套所有 TF；event-stop 的保鲜和 HTF 深限的有效期老化速度不同。
+5. **修订**：旧单先 `cancelled/invalidated`，替换单才生效。平台撤单未确认 → 报 `撤单待确认`，不叠加风险。
+
+### 场地摩擦进 RR（非加密 / TradFi）
+
+计划 RR 按**净成本后**口径报（ECN 往返 ~1 pip 量级，按用户场地）。损 buffer = `max(0.25×ATR, 点差垫)`；TP limit 略缩进理论目标内侧。永远报现实到手区间，不只报教科书 RR。
 
 ---
 
-## 5. Same-structure fuse + loss fuse
+## 4. Crypto BTC 前置查
 
-**Same structure zone** (same swing cluster / same POI): after **two** stops at the same tier, the idea is dead at that tier. Third entry only if structure **upgraded**: HTF close-through / flip trio complete / tier upgraded to READY.
+任何 **alt 多头**前：
 
-- Fuse blocks “same idea, worse price.”
-- Fuse does **not** block a truly new trade after structure change (JPY 07-07: same-zone triple loss was same-tier retry; breakout-confirmed 4th became week’s winner).
-
-Day loss fuse: see section 1 item 4. Same spirit — blocks revenge repetition, not upgraded A+ structure.
+1. 拉 BTC M15+H4 最近 ~6 根：有没有迫近的扫低/下杀风险（钉在流动性上、H4 连阴、结构弱）？
+2. BTC 不健康 → 不开 alt 多，或明说：BTC 结构有下杀风险，alt 多头可能被 beta 洗掉。
+3. BTC 刚砸完后的一批 alt 多 = 一个 BTC-beta 事件，不是独立样本；等 BTC 企稳再数新候选。
 
 ---
 
-## 6. Fast / slow review reminder
+## 5. 同结构熔断 + 连亏熔断
 
-Details: `trade-execution-overlays.md`.
+**同结构区**（同 swing 簇/同 POI）：同级**两次**止损后该想法在该级已死。第三次只认结构**升级**：HTF 收盘穿越/翻转三件套完成/层级升到 READY。
 
-- Fast review catches executable M5/M15 windows.
-- Slow review confirms / downgrades / manages / records — **never the only gate** that kills a good fast setup after the fact.
-- Quality: hard kills (no entry/stop/target, target consumed, poor RR, midrange chop, story-only ICT); smaller size on conditional-wait; quick partial at management; slow veto on adds/runners only.
+- 熔断拦的是「同想法、更差价」。
+- 熔断**不拦**结构改变后的真新交易（JPY 07-07：同区三连损是同级重试；突破确认后的第 4 次成了当周最大赢单）。
+
+日亏熔断见 §1 第 5 条。同一精神：拦复仇重复，不拦升级后的 A+。
+
+---
+
+## 6. 快审 / 慢审
+
+细则 `trade-execution-overlays.md`。快审抓可执行的 M5/M15 窗口；慢审确认/降级/管理/记录——**永不当事后杀死好快单的唯一门**。质量：硬杀（无入场/损/目标、目标已耗、RR 差、中段震荡、纯故事 ICT）；等触发缩仓；管理位快减；慢审否决权只用于加仓/runner。

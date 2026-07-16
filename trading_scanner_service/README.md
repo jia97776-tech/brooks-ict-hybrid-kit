@@ -4,9 +4,11 @@ Local HTTP scanner for Codex live-desk use.
 
 ## Data Source Rule
 
-- Crypto and supported US-stock perps prefer Bitget USDT-M futures, with MEXC fallback.
-- FX, metals, US indices, and oil prefer Bitget TradFi public kline data.
-- If Bitget TradFi is unavailable, the router falls back to the supported Gate/MEXC routes.
+- Gate-only since 2026-07-14. There is no cross-venue fallback.
+- Crypto uses Gate USDT-M futures.
+- FX, metals, indexes, oil, and US stocks use Gate TradFi.
+- If Gate is unavailable, the request fails with `SourceError` instead of
+  silently mixing quotes from another venue.
 
 ## Run
 
@@ -24,10 +26,15 @@ python3 -m unittest discover -s tests -v
 
 - `GET /price/{symbol}`
 - `GET /bars?symbol={symbol}&tf=M15` (M1/M5/M15/M30/H1/H4/D1/W1)
+- `GET /multi-bars?symbol={symbol}&tfs=1m,5m,15m,1h,4h,1d,1w`
 - `POST /scanner/run-once?mode=intraday|swing|both` (M15 / H4 / both)
 - `GET /scanner/status`
 - `POST /scan/run?mode=...`
 - `GET /scan/status/{job_id}`
+- `GET /signals?limit=100`
+- `GET /symbols`
+- `GET /healthz`
+- `GET /openapi.json`
 
 ## Scanner Logic (2026-07-01 rebuild)
 
@@ -49,5 +56,5 @@ planned RR from the POI retest, `rr_now` = chase-RR from current price,
 `late` = price left the sweep zone, `target_crowded` = near target consumed
 (< 0.8 ATR away), `equal_liquidity` = clustered equal highs/lows at the DOL.
 
-Default universe: 17 symbols (crypto, metals, oil, NAS100/US500/US30, USD
-FX majors). UK100/HK50/USDCNH/XBRUSD are not supported by the data sources.
+Default universe: 28 symbols across crypto, metals, oil, indexes, USD FX
+majors, and four US stocks. UK100/HK50/USDCNH/XBRUSD are not supported.

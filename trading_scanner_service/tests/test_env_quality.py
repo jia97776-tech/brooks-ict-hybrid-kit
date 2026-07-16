@@ -118,7 +118,7 @@ def test_trigger_failed_early():
 
 
 def test_smt_divergence_and_sweep_depth():
-    from scanner_service.structure import smt_divergence, sweep_depth_atr
+    from scanner_service.structure import smt_divergence, sweep_depth_atr, smt_partner
     ctx_a = trend_context(20, step=-0.5, base=200.0)  # downtrend
     ctx_b = trend_context(20, step=-0.5, base=100.0)
     la = min(b.low for b in ctx_a[-16:])
@@ -132,6 +132,19 @@ def test_smt_divergence_and_sweep_depth():
     b2 = ctx_b + [mk(lb + 1, lb + 1.2, lb - 0.9, lb + 0.9, ts=9100 + i) for i in range(4)]
     hit2, note2 = smt_divergence(a, b2, "LONG")
     assert not hit2, note2
+    # inverse SMT (EUR vs DXY style): A swept low; B failed new high
+    ha = max(b.high for b in ctx_b[-16:])
+    b_inv = ctx_b + [mk(ha - 0.5, ha - 0.1, ha - 1.0, ha - 0.4, ts=9100 + i) for i in range(4)]
+    hit_inv, note_inv = smt_divergence(a, b_inv, "LONG", inverse=True)
+    assert hit_inv, note_inv
+    partner, inv = smt_partner("EURUSD")
+    assert partner == "GBPUSD" and inv is False  # same-complex first
+    partner_dxy, inv_dxy = smt_partner("AUDUSD")
+    assert partner_dxy == "DXY" and inv_dxy is True
+    partner2, inv2 = smt_partner("USDJPY")
+    assert partner2 == "DXY" and inv2 is False
+    partner_xag, inv_xag = smt_partner("XAGUSD")
+    assert partner_xag == "XAUUSD" and inv_xag is False
     # sweep depth: pierced 0.8 below level; ATR from context ~1.2
     d = sweep_depth_atr(a, la, "LONG")
     assert 0.1 < d < 2.0, d

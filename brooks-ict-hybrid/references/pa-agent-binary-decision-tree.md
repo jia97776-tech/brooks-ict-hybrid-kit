@@ -1,6 +1,6 @@
 # PA Agent Binary Decision Tree
 
-Source: local PA_Agent research source.
+Source: local PA_Agent at `C:\Users\38646\Documents\Codex\2026-06-18\claude-codex-hermes-r-r-ict-2\external_repos\PA_Agent`.
 
 Use this reference to reduce hallucination in chart analysis. The method is simple: every step asks one narrow yes/no question, records the evidence, and only then moves to the next step. If the answer is unclear, default to `wait`, not a forced long or short.
 

@@ -483,22 +483,59 @@ def trigger_failed_early(trigger_bar: Bar, later_bars: list[Bar], direction: str
     return False
 
 
+# Positive-correlation SMT partners (move together).
 CORRELATED_PAIRS = {
     "BTC": "ETH", "ETH": "BTC",
     "NAS100": "US500", "US500": "NAS100",
     "EURUSD": "GBPUSD", "GBPUSD": "EURUSD",
     "XAUUSD": "XAGUSD", "XAGUSD": "XAUUSD",
+    # Dollar index (same direction as USD-base FX).
+    "USDJPY": "DXY",
+    "USDCAD": "DXY",
+    "USDCHF": "DXY",
+}
+
+# Inverse-correlation SMT partners (e.g. EURUSD vs DXY).
+# When A sweeps a low for LONG, inverse B should fail to make a new high.
+# Metals stay in CORRELATED_PAIRS (XAU↔XAG), not here — ICT metal SMT is
+# gold/silver same-complex, not silver vs DXY as primary.
+INVERSE_SMT_PAIRS = {
+    "EURUSD": "DXY",
+    "GBPUSD": "DXY",
+    "AUDUSD": "DXY",
+    "NZDUSD": "DXY",
+    "DXY": "EURUSD",
 }
 
 
-def smt_divergence(bars_a: list[Bar], bars_b: list[Bar], direction: str,
-                   lookback: int = 16) -> tuple[bool, str]:
-    """ICT SMT: symbol A swept its prior extreme while correlated symbol B
-    failed to sweep its own — divergence supports the reversal `direction`.
+def smt_partner(symbol: str) -> tuple[str | None, bool]:
+    """Return (partner_symbol, inverse).
 
-    direction "LONG": A took out its prior swing low (sell-side sweep); SMT
-    holds if B's recent low did NOT break B's prior swing low. Mirrored for
-    SHORT. Uses only closed bars; both series must cover the same window.
+    Prefer same-complex correlated pairs first (XAU↔XAG, EUR↔GBP, …),
+    then inverse DXY map for USD-quote FX legs.
+    """
+    s = symbol.upper()
+    if s in CORRELATED_PAIRS:
+        return CORRELATED_PAIRS[s], False
+    if s in INVERSE_SMT_PAIRS:
+        return INVERSE_SMT_PAIRS[s], True
+    return None, False
+
+
+def smt_divergence(bars_a: list[Bar], bars_b: list[Bar], direction: str,
+                   lookback: int = 16, *, inverse: bool = False) -> tuple[bool, str]:
+    """ICT SMT: symbol A swept its prior extreme while partner B failed to
+    confirm — divergence supports the reversal `direction`.
+
+    Positive correlation (default):
+      LONG: A swept prior low; B did NOT break its prior low.
+      SHORT: A swept prior high; B did NOT break its prior high.
+
+    Inverse correlation (e.g. EURUSD vs DXY):
+      LONG on A: A swept prior low; B failed to make a new high.
+      SHORT on A: A swept prior high; B failed to make a new low.
+
+    Uses only closed bars; both series must cover the same window.
     """
     if len(bars_a) < lookback + 4 or len(bars_b) < lookback + 4:
         return False, "insufficient bars"
@@ -506,13 +543,20 @@ def smt_divergence(bars_a: list[Bar], bars_b: list[Bar], direction: str,
     recent_b, prior_b = bars_b[-4:], bars_b[-lookback - 4:-4]
     if direction == "LONG":
         a_swept = min(b.low for b in recent_a) < min(b.low for b in prior_a)
-        b_held = min(b.low for b in recent_b) >= min(b.low for b in prior_b)
+        if inverse:
+            b_held = max(b.high for b in recent_b) <= max(b.high for b in prior_b)
+        else:
+            b_held = min(b.low for b in recent_b) >= min(b.low for b in prior_b)
     else:
         a_swept = max(b.high for b in recent_a) > max(b.high for b in prior_a)
-        b_held = max(b.high for b in recent_b) <= max(b.high for b in prior_b)
+        if inverse:
+            b_held = min(b.low for b in recent_b) >= min(b.low for b in prior_b)
+        else:
+            b_held = max(b.high for b in recent_b) <= max(b.high for b in prior_b)
     if a_swept and b_held:
-        return True, "SMT: A swept, correlated held"
-    return False, ("no sweep on A" if not a_swept else "correlated swept too")
+        kind = "inverse" if inverse else "correlated"
+        return True, f"SMT({kind}): A swept, partner held"
+    return False, ("no sweep on A" if not a_swept else "partner swept too")
 
 
 def sweep_depth_atr(bars: list[Bar], swept_level: float, direction: str,
@@ -532,3 +576,211 @@ def sweep_depth_atr(bars: list[Bar], swept_level: float, direction: str,
     else:
         pierce = max(b.high for b in w) - swept_level
     return round(max(0.0, pierce) / atr, 3)
+
+
+# --- confirm_bar (desk trigger contract, 2026-07-14) ---
+# Moves "which confirm K / trigger price / cancel" into scanner code.
+# Desk may only quote these fields; must not invent trigger prices.
+
+CONFIRM_TTL_BARS = 6
+# TFs that may host an executable entry confirm_bar (Tier 2).
+ENTRY_TFS = frozenset({"M1", "M5"})
+# Parent/map TFs: MSS/CISD here is direction/management map, not entry trigger.
+MAP_TFS = frozenset({"M15", "H1", "H4", "D1", "W1"})
+
+
+def confirm_tf_role(tf: str) -> tuple[str, str, str]:
+    """Return (role, map_tf, entry_tf_hint).
+
+    role:
+      entry_confirm — confirm_bar may supply Tier-2 trigger prices
+      map_confirm   — map/management only; desk must not use trigger as entry
+    """
+    tf_u = (tf or "").upper()
+    if tf_u in ENTRY_TFS:
+        return "entry_confirm", tf_u, tf_u
+    # Default: treat unknown as map for safety (no invented entry triggers).
+    hint = "M5"
+    return "map_confirm", tf_u or "M15", hint
+
+
+def _first_close_through_index(
+    bars: list[Bar], level: float, direction: str, start: int
+) -> int | None:
+    """Index of first bar that *closes* through level in trade direction.
+
+    SHORT: close < level. LONG: close > level.
+    """
+    for j in range(start, len(bars)):
+        c = bars[j].close
+        if direction == "SHORT" and c < level:
+            return j
+        if direction == "LONG" and c > level:
+            return j
+    return None
+
+
+def _closed_back_through(
+    bars: list[Bar], level: float, direction: str, start: int
+) -> bool:
+    """True if any close after start reclaims the wrong side of frozen level."""
+    for j in range(start, len(bars)):
+        c = bars[j].close
+        if direction == "SHORT" and c > level:
+            return True
+        if direction == "LONG" and c < level:
+            return True
+    return False
+
+
+def _fmt_bar_time(ts: float | int) -> str:
+    from datetime import datetime, timezone
+
+    try:
+        return datetime.fromtimestamp(float(ts), tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (TypeError, ValueError, OSError, OverflowError):
+        return str(ts)
+
+
+def _market_ok_and_fails(
+    price: float,
+    cb: Bar,
+    frozen: float,
+    trigger: float,
+    direction: str,
+) -> tuple[bool, list[str]]:
+    fails: list[str] = []
+    if not (cb.low <= price <= cb.high):
+        fails.append("price_outside_confirm_range")
+    if direction == "SHORT":
+        if price >= frozen:
+            fails.append("wrong_side_of_frozen")
+        if price < trigger:
+            fails.append("beyond_trigger_extreme")
+    else:
+        if price <= frozen:
+            fails.append("wrong_side_of_frozen")
+        if price > trigger:
+            fails.append("beyond_trigger_extreme")
+    return (len(fails) == 0), fails
+
+
+def build_confirm_bar(
+    bars: list[Bar],
+    direction: str,
+    atr: float,
+    mss_level: float | None,
+    mss_ok: bool,
+    cisd_level: float | None,
+    cisd_ok: bool,
+    after_index: int,
+    tf: str,
+    price: float,
+    spread_pad: float = 0.0,
+) -> dict | None:
+    """Build confirm_bar for a sweep-reversal candidate.
+
+    Returns None if no MSS/CISD close confirmation, TTL expired, or frozen
+    level was reclaimed by a later close (old confirm must not resurrect).
+
+    Event selection when both MSS and CISD confirm: the *later* close-through
+    event and its frozen level (skill: MSS+CISD uses the later confirmation).
+    """
+    if direction not in ("SHORT", "LONG"):
+        return None
+
+    candidates: list[tuple[int, str, float, str]] = []
+    # (confirm_idx, event_kind, frozen_level, frozen_source)
+    if mss_ok and mss_level is not None:
+        idx = _first_close_through_index(bars, mss_level, direction, after_index + 1)
+        if idx is not None:
+            candidates.append((idx, "MSS", mss_level, "confirmed_swing"))
+    if cisd_ok and cisd_level is not None:
+        idx = _first_close_through_index(bars, cisd_level, direction, after_index + 1)
+        if idx is not None:
+            candidates.append((idx, "CISD", cisd_level, "delivery_open"))
+
+    if not candidates:
+        return None
+
+    # Later confirmation wins; if same bar, prefer combined label
+    candidates.sort(key=lambda x: x[0])
+    last_idx = candidates[-1][0]
+    same_bar = [c for c in candidates if c[0] == last_idx]
+    if len(same_bar) > 1:
+        # both on same bar — use later-defined frozen: prefer the event with
+        # larger index order CISD after MSS if both; for frozen use the level
+        # that was broken on this bar for the combined event. Spec: MSS+CISD
+        # uses the later event's price — same bar → tag MSS+CISD and use
+        # the frozen level of the second listed in same_bar after sort by source
+        # priority: if both, frozen = the one whose level was the "decisive"
+        # later in skill text = last in candidates list among same bar.
+        frozen = same_bar[-1][2]
+        source = same_bar[-1][3]
+        kinds = {c[1] for c in same_bar}
+        event = "MSS+CISD" if kinds == {"MSS", "CISD"} else same_bar[-1][1]
+    elif len(candidates) > 1:
+        # different bars: last one is later
+        event = "MSS+CISD" if {c[1] for c in candidates} == {"MSS", "CISD"} else candidates[-1][1]
+        # frozen from the later event only
+        frozen = candidates[-1][2]
+        source = candidates[-1][3]
+        # if both events, label MSS+CISD but frozen from later
+        if {c[1] for c in candidates} == {"MSS", "CISD"}:
+            event = "MSS+CISD"
+    else:
+        event = candidates[-1][1]
+        frozen = candidates[-1][2]
+        source = candidates[-1][3]
+
+    cb_idx = last_idx
+    cb = bars[cb_idx]
+    age = len(bars) - 1 - cb_idx
+    if age >= CONFIRM_TTL_BARS:
+        return None
+    # invalidate if any close after confirm bar reclaims frozen
+    if _closed_back_through(bars, frozen, direction, cb_idx + 1):
+        return None
+
+    buf = max(0.25 * atr, spread_pad)
+    if direction == "SHORT":
+        trigger = cb.low - buf
+        side = "sell_stop_below_low"
+    else:
+        trigger = cb.high + buf
+        side = "buy_stop_above_high"
+
+    market_ok, market_fail = _market_ok_and_fails(price, cb, frozen, trigger, direction)
+    role, map_tf, entry_tf_hint = confirm_tf_role(tf)
+
+    def _r(x: float) -> float:
+        if abs(x) >= 100:
+            return round(x, 2)
+        if abs(x) >= 1:
+            return round(x, 5)
+        return round(x, 8)
+
+    return {
+        "tf": tf,
+        "role": role,
+        "map_tf": map_tf,
+        "entry_tf_hint": entry_tf_hint,
+        "event": event,
+        "frozen_level": _r(frozen),
+        "frozen_source": source,
+        "bar_time": _fmt_bar_time(cb.ts),
+        "bar_age": age,
+        "open": _r(cb.open),
+        "high": _r(cb.high),
+        "low": _r(cb.low),
+        "close": _r(cb.close),
+        "buffer": _r(buf),
+        "buffer_calc": f"max(0.25*ATR={0.25 * atr:.5g}, spread_pad={spread_pad})",
+        "trigger_price": _r(trigger),
+        "trigger_side": side,
+        "market_ok": market_ok,
+        "market_fail": market_fail,
+        "expiry_bars": CONFIRM_TTL_BARS,
+        "bars_since_confirm": age,
+        "cancel_level": _r(frozen),
+    }

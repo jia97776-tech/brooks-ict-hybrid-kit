@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from scanner_service.improve_fill import attach_improve_fill
+from scanner_service.limit_zone import build_limit_zone
 from scanner_service.sources import Bar
 from scanner_service.structure import (
     average_true_range,
+    build_confirm_bar,
     cisd_after_sweep,
     contracting,
     detect_latest_sweep,
@@ -68,6 +71,20 @@ def _base(symbol: str, tf: str, price: float | None) -> dict:
         "d1_bias": None,
         "counter_d1": False,
         "stale_data": False,
+        "confirm_bar": None,
+        "rr_from_trigger": None,
+        "pushable": False,
+        "not_pushable_reason": None,
+        "ltf_confirm_bar": None,
+        "ltf_tf": None,
+        "ltf_status": None,
+        "entry_confirm_bar": None,
+        "limit_zone": None,
+        # SMT confirm (desk evidence; not an auto entry gate)
+        "smt": False,
+        "smt_partner": None,
+        "smt_inverse": False,
+        "smt_note": None,
     }
 
 
@@ -235,5 +252,200 @@ def scan_symbol(
                               "this sweep is a pullback in the D1 trend; "
                               "default is the with-trend pullback limit at the structural shelf, not this fade")
 
+    # confirm_bar: mechanical trigger contract for the desk (2026-07-14).
+    # Null when MSS/CISD not confirmed on close, TTL expired, or frozen reclaimed.
+    # Desk must quote these fields verbatim for any numeric trigger price.
+    confirm = build_confirm_bar(
+        bars=bars,
+        direction=direction,
+        atr=atr,
+        mss_level=mss_level,
+        mss_ok=mss_ok,
+        cisd_level=cisd_level,
+        cisd_ok=cisd_ok,
+        after_index=sweep.extreme_index,
+        tf=tf,
+        price=price,
+        spread_pad=0.0,
+    )
+    # improve_fill: optional confirm_bar subfield (v2 §六) — entry TF + market_ok only
+    confirm = attach_improve_fill(confirm, bars, direction, zone_tf=tf)
+    out["confirm_bar"] = confirm
+    if confirm is not None and dol is not None:
+        trig = confirm["trigger_price"]
+        # Desk-stop proxy for RR preview: same scanner SL (sweep extreme ± 0.25 ATR).
+        # Real hard SL still re-anchored by desk triple constraint at fill time.
+        if direction == "SHORT":
+            risk_t = sl - trig
+            reward_t = trig - dol
+        else:
+            risk_t = trig - sl
+            reward_t = dol - trig
+        out["rr_from_trigger"] = (
+            round(reward_t / risk_t, 2) if risk_t > 0 and reward_t is not None else None
+        )
+
+    # pushable: desk may actively propose an *executable entry* quoting this
+    # confirm_bar's trigger. Map-TF confirms and CISD-only are never pushable.
+    cisd_only = bool(cisd_ok and not mss_ok)
+    if confirm is None:
+        out["pushable"] = False
+        out["not_pushable_reason"] = "no_confirm_bar"
+    elif "beyond_trigger_extreme" in confirm.get("market_fail", []):
+        out["pushable"] = False
+        out["not_pushable_reason"] = "chase"
+        out["ltf_status"] = "chase"
+    elif cisd_only:
+        out["pushable"] = False
+        out["not_pushable_reason"] = "cisd_only"
+    elif confirm.get("role") == "map_confirm":
+        out["pushable"] = False
+        out["not_pushable_reason"] = "map_tf_not_entry"
+    elif out.get("stale_data"):
+        out["pushable"] = False
+        out["not_pushable_reason"] = "stale_data"
+    else:
+        # entry_confirm + has MSS (alone or with CISD)
+        out["pushable"] = True
+        out["not_pushable_reason"] = None
+        out["ltf_status"] = "entry_ready" if confirm.get("market_ok") else "entry_pending"
+
     _apply_staleness(out, bars, tf, now)
+    # re-apply pushable after staleness may have flipped state
+    if out.get("stale_data") and out.get("pushable"):
+        out["pushable"] = False
+        out["not_pushable_reason"] = "stale_data"
+    # entry_confirm_bar alias when parent itself is entry TF
+    if out.get("pushable") and out.get("confirm_bar"):
+        out["entry_confirm_bar"] = out["confirm_bar"]
+
+    # limit_zone (v2 §五): deep structure pending-limit arithmetic only.
+    # requires_desk_review always — never auto-hang; desk runs full pipeline.
+    out["limit_zone"] = build_limit_zone(
+        direction=direction,
+        bars=bars,
+        sweep=sweep,
+        atr=atr,
+        dol=dol,
+        tf=tf,
+        htf_bias=out.get("htf_bias"),
+        counter_htf=bool(out.get("counter_htf")),
+        stale_data=bool(out.get("stale_data")),
+        news_risk=bool(out.get("news_risk")),
+        spread_pad=0.0,
+    )
     return out
+
+
+# C-tier: machine signals not pushed (papertrack / skill). No LTF spend.
+C_TIER_SYMBOLS = frozenset({"ZEC", "EURUSD", "US30", "PEPE"})
+# Map TFs that may receive an LTF confirm attach.
+MAP_PARENT_TFS = frozenset({"M15", "H4", "H1", "D1"})
+
+
+def wants_ltf_confirm(parent: dict) -> bool:
+    """Whether this map parent is worth an M1/M5 confirm_bar fetch."""
+    if not parent:
+        return False
+    if parent.get("direction") in (None, "WAIT"):
+        return False
+    if not parent.get("sweep"):
+        return False
+    if parent.get("symbol", "").upper() in C_TIER_SYMBOLS:
+        return False
+    if parent.get("stale_data"):
+        return False
+    if parent.get("target_crowded"):
+        return False
+    # CISD-only map: never push; skip LTF cost
+    if parent.get("cisd") and not parent.get("mss"):
+        return False
+    tf = (parent.get("tf") or "").upper()
+    if tf not in MAP_PARENT_TFS:
+        return False  # already entry TF or unknown
+    if parent.get("state") not in ("READY", "CONDITIONAL_READY"):
+        return False
+    return True
+
+
+def apply_ltf_confirm_bar(
+    parent: dict,
+    ltf_bars: list[Bar],
+    ltf_tf: str = "M5",
+    now: float | None = None,
+) -> dict:
+    """Attach M1/M5 confirm_bar to a map parent and recompute pushable.
+
+    Parent map `confirm_bar` is preserved. Executable entry numbers come from
+    `ltf_confirm_bar` / `entry_confirm_bar` when pushable.
+    """
+    parent = dict(parent)
+    parent["ltf_tf"] = ltf_tf
+    parent["ltf_confirm_bar"] = None
+    parent["entry_confirm_bar"] = None
+
+    if not ltf_bars or len(ltf_bars) < MIN_BARS:
+        parent["ltf_status"] = "bars_short"
+        parent["pushable"] = False
+        parent["not_pushable_reason"] = "no_ltf_confirm_bar"
+        return parent
+
+    ltf = scan_symbol(
+        parent["symbol"],
+        ltf_bars,
+        tf=ltf_tf,
+        now=now,
+    )
+    parent["ltf_direction"] = ltf.get("direction")
+    parent["ltf_state"] = ltf.get("state")
+    parent["ltf_mss"] = ltf.get("mss")
+    parent["ltf_cisd"] = ltf.get("cisd")
+    parent["ltf_rr_from_trigger"] = ltf.get("rr_from_trigger")
+
+    # No active LTF sweep yet → still waiting, not a direction fight
+    if ltf.get("direction") in (None, "WAIT") or not ltf.get("sweep"):
+        parent["ltf_status"] = "awaiting_ltf_confirm"
+        parent["pushable"] = False
+        parent["not_pushable_reason"] = "no_ltf_confirm_bar"
+        return parent
+
+    if ltf.get("direction") != parent.get("direction"):
+        parent["ltf_status"] = "direction_mismatch"
+        parent["pushable"] = False
+        parent["not_pushable_reason"] = "no_ltf_confirm_bar"
+        return parent
+
+    cb = ltf.get("confirm_bar")
+    parent["ltf_confirm_bar"] = cb
+
+    cisd_only = bool(ltf.get("cisd") and not ltf.get("mss"))
+    if cb is None:
+        parent["pushable"] = False
+        parent["not_pushable_reason"] = "no_ltf_confirm_bar"
+        parent["ltf_status"] = "awaiting_ltf_confirm"
+    elif "beyond_trigger_extreme" in cb.get("market_fail", []):
+        parent["pushable"] = False
+        parent["not_pushable_reason"] = "chase"
+        parent["ltf_status"] = "chase"
+    elif cisd_only:
+        parent["pushable"] = False
+        parent["not_pushable_reason"] = "cisd_only"
+        parent["ltf_status"] = "ltf_cisd_only"
+    elif cb.get("role") != "entry_confirm":
+        parent["pushable"] = False
+        parent["not_pushable_reason"] = "map_tf_not_entry"
+        parent["ltf_status"] = "ltf_not_entry_role"
+    elif ltf.get("stale_data"):
+        parent["pushable"] = False
+        parent["not_pushable_reason"] = "stale_data"
+        parent["ltf_status"] = "ltf_stale"
+    else:
+        parent["pushable"] = True
+        parent["not_pushable_reason"] = None
+        parent["entry_confirm_bar"] = cb
+        parent["ltf_status"] = "entry_ready" if cb.get("market_ok") else "entry_pending"
+        # Prefer LTF proxy RR when available
+        if ltf.get("rr_from_trigger") is not None:
+            parent["rr_from_trigger"] = ltf.get("rr_from_trigger")
+
+    return parent

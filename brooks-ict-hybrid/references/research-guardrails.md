@@ -1,6 +1,10 @@
 # Research Guardrails
 
-These notes are distilled from local ICT/PA specialist, DOL/PDA, and trading-playbook research projects.
+These notes are distilled from local research projects including:
+
+- `D:\claude-workspace\ict_pa_specialist_v1`
+- `D:\claude-workspace\ict_dol_pda_v1`
+- `D:\ClaudeWork\TradingPlaybook`
 
 ## Important Status
 

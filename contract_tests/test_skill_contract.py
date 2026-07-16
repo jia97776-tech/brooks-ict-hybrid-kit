@@ -20,7 +20,7 @@ class StopContractTests(unittest.TestCase):
         cls.changelog = CHANGELOG.read_text(encoding="utf-8")
 
     def test_version_and_stop_scope_are_binding(self):
-        self.assertIn("2026-07-12j", self.skill)
+        self.assertIn("2026-07-15c", self.skill)
         self.assertIn("止损级别", self.skill)
         for scope in ("M1/M5 触发损", "M15 结构损", "H4 POI 整层损"):
             self.assertIn(scope, self.skill)
@@ -76,6 +76,18 @@ class StopContractTests(unittest.TestCase):
         self.assertIn("文件操作 ≠ 仓位操作", self.skill)
         self.assertIn("明确点名品种", self.skill)
         self.assertIn("不得改变当前仓位", self.gates)
+
+    def test_chase_and_gate_only_stack_are_documented(self):
+        stack = (ROOT / "brooks-ict-hybrid" / "references" / "local-stack.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("`chase`", stack)
+        self.assertIn("`ltf_status=chase`", stack)
+        self.assertIn("Gate-only", stack)
+        self.assertIn("`GET /openapi.json`", stack)
+        self.assertIn("`GET /signals?limit=N`", stack)
+        self.assertNotIn("Bitget USDT-M futures", stack)
+        self.assertNotIn("故障回落 MEXC", stack)
 
 
 if __name__ == "__main__":

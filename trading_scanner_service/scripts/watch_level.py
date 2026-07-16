@@ -31,6 +31,13 @@ def get_price(symbol: str) -> float:
 def notify(webhook: str | None, text: str) -> None:
     print(text, flush=True)
     if not webhook:
+        # no webhook -> fall back to the bridge bot DM (same channel as a_watch)
+        try:
+            sys.path.insert(0, "/home/ubuntu/trading_scanner_service")
+            from scanner_service.push_ready import send_feishu
+            send_feishu(text)
+        except Exception as exc:
+            print(f"[watch] 飞书DM推送失败: {exc}", file=sys.stderr, flush=True)
         return
     payload = json.dumps({"msg_type": "text", "content": {"text": text}}).encode("utf-8")
     req = urllib.request.Request(webhook, data=payload, headers={"Content-Type": "application/json"})

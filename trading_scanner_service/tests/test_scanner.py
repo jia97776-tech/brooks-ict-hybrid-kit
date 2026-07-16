@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 from scanner_service.scanner import scan_symbol
 from scanner_service.sources import Bar
@@ -39,6 +40,21 @@ def mirror(bars, pivot=200.0):
         Bar(ts=b.ts, open=pivot - b.open, high=pivot - b.low, low=pivot - b.high, close=pivot - b.close, volume=b.volume)
         for b in bars
     ]
+
+
+def beyond_short_trigger_bars():
+    """Move the live price below the already-confirmed short stop trigger."""
+    bars = sweep_short_bars()
+    last = bars[-1]
+    bars[-1] = Bar(
+        ts=last.ts,
+        open=last.open,
+        high=last.high,
+        low=98.5,
+        close=98.7,
+        volume=last.volume,
+    )
+    return bars
 
 
 class ScannerTest(unittest.TestCase):
@@ -369,3 +385,236 @@ class StaleDataTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConfirmBarTest(unittest.TestCase):
+    """confirm_bar contract (2026-07-14): desk quotes scanner fields, never invents triggers."""
+
+    def test_ready_short_has_confirm_bar_with_required_fields(self):
+        c = scan_symbol("BTC", sweep_short_bars())
+        self.assertEqual(c["state"], "READY")
+        cb = c["confirm_bar"]
+        self.assertIsNotNone(cb)
+        for key in (
+            "tf", "role", "map_tf", "entry_tf_hint", "event", "frozen_level",
+            "frozen_source", "bar_time", "bar_age", "open", "high", "low", "close",
+            "buffer", "buffer_calc", "trigger_price", "trigger_side", "market_ok",
+            "market_fail", "expiry_bars", "bars_since_confirm", "cancel_level",
+        ):
+            self.assertIn(key, cb)
+        self.assertIn(cb["event"], ("MSS", "CISD", "MSS+CISD"))
+        self.assertIn(cb["frozen_source"], ("confirmed_swing", "delivery_open"))
+        self.assertEqual(cb["trigger_side"], "sell_stop_below_low")
+        self.assertEqual(cb["cancel_level"], cb["frozen_level"])
+        self.assertEqual(cb["expiry_bars"], 6)
+        # default scan tf is M15 → map layer, not executable entry
+        self.assertEqual(cb["role"], "map_confirm")
+        self.assertEqual(cb["entry_tf_hint"], "M5")
+        self.assertFalse(c["pushable"])
+        self.assertEqual(c["not_pushable_reason"], "map_tf_not_entry")
+        # trigger = confirm low - buffer
+        self.assertAlmostEqual(cb["trigger_price"], cb["low"] - cb["buffer"], places=5)
+        # price has left confirm range on fixture → market_ok false
+        self.assertFalse(cb["market_ok"])
+        self.assertIn("price_outside_confirm_range", cb["market_fail"])
+
+    def test_ready_long_confirm_bar_is_mirror(self):
+        c = scan_symbol("ETH", mirror(sweep_short_bars()))
+        self.assertEqual(c["direction"], "LONG")
+        cb = c["confirm_bar"]
+        self.assertIsNotNone(cb)
+        self.assertEqual(cb["trigger_side"], "buy_stop_above_high")
+        # both sides rounded by scanner; allow 2dp for large prices
+        self.assertAlmostEqual(cb["trigger_price"], round(cb["high"] + cb["buffer"], 5), places=2)
+
+    def test_no_confirm_means_null_confirm_bar(self):
+        # Sweep high but no close through MSS/CISD yet: stop after sweep reclaim bars
+        # without breaking the 100 swing low.
+        rows = [
+            (100.0, 101.0, 99.0, 100.0),
+            (100.0, 102.0, 99.5, 101.0),
+            (101.0, 103.0, 95.0, 102.0),
+            (102.0, 104.0, 101.0, 103.0),
+            (103.0, 105.0, 102.0, 104.0),
+            (104.0, 104.5, 102.5, 103.0),
+            (103.0, 103.5, 101.5, 102.0),
+            (102.0, 102.5, 100.5, 101.0),
+            (101.0, 101.5, 100.0, 100.5),
+            (100.5, 102.0, 100.2, 101.5),
+            (101.5, 102.5, 101.0, 102.0),
+            (102.0, 103.0, 101.5, 102.5),
+            (102.5, 104.0, 102.0, 103.5),
+            (103.5, 105.5, 103.0, 104.8),  # sweep extreme
+            (104.8, 105.0, 103.5, 104.0),
+            (104.0, 104.2, 102.5, 103.0),
+            (103.0, 103.5, 102.0, 102.5),
+            (102.5, 103.0, 101.5, 102.0),
+            (102.0, 102.5, 101.2, 101.8),
+            (101.8, 102.2, 101.0, 101.5),
+        ]
+        bars = [Bar(ts=i, open=o, high=h, low=l, close=c, volume=1) for i, (o, h, l, c) in enumerate(rows)]
+        cand = scan_symbol("BTC", bars)
+        self.assertTrue(cand["sweep"])
+        self.assertFalse(cand["mss"])
+        self.assertFalse(cand["cisd"])
+        self.assertIsNone(cand["confirm_bar"])
+        self.assertIsNone(cand["rr_from_trigger"])
+
+    def test_ttl_expiry_nulls_confirm_bar(self):
+        base = sweep_short_bars()
+        # Pad 6+ bars after last without reclaiming above frozen (stay below ~99)
+        extra = []
+        last = base[-1]
+        for i in range(8):
+            ts = last.ts + 1 + i
+            extra.append(Bar(ts=ts, open=99.0, high=99.2, low=98.5, close=98.8, volume=1))
+        bars = base + extra
+        cand = scan_symbol("BTC", bars)
+        # Still READY structurally (mss/cisd true historically) but confirm_bar TTL dead
+        self.assertIsNone(cand["confirm_bar"])
+
+    def test_reclaim_invalidates_confirm_bar(self):
+        base = sweep_short_bars()
+        # After confirm, close back above frozen (~100/100.5)
+        extra = [
+            Bar(ts=base[-1].ts + 1, open=99.5, high=101.5, low=99.4, close=101.2, volume=1),
+        ]
+        # Need still look like a sweep-high? reclaim may kill active sweep detection.
+        bars = base + extra
+        cand = scan_symbol("BTC", bars)
+        # Either no active sweep or confirm_bar null after reclaim
+        if cand["confirm_bar"] is not None:
+            self.fail("confirm_bar must be null after close back through frozen")
+
+    def test_m5_entry_tf_can_be_pushable_with_mss(self):
+        c = scan_symbol("BTC", sweep_short_bars(), tf="M5")
+        self.assertTrue(c["mss"])
+        cb = c["confirm_bar"]
+        self.assertIsNotNone(cb)
+        self.assertEqual(cb["role"], "entry_confirm")
+        self.assertTrue(c["pushable"])
+        self.assertIsNone(c["not_pushable_reason"])
+
+    def test_m5_entry_tf_beyond_trigger_is_chase_not_pushable(self):
+        c = scan_symbol("BTC", beyond_short_trigger_bars(), tf="M5")
+        cb = c["confirm_bar"]
+
+        self.assertIsNotNone(cb)
+        self.assertIn("beyond_trigger_extreme", cb["market_fail"])
+        self.assertFalse(c["pushable"])
+        self.assertEqual(c["not_pushable_reason"], "chase")
+        self.assertEqual(c["ltf_status"], "chase")
+        self.assertIsNone(c["entry_confirm_bar"])
+
+    def test_m5_cisd_only_beyond_trigger_is_still_chase(self):
+        with mock.patch(
+            "scanner_service.scanner.mss_after_sweep",
+            return_value=(None, False),
+        ):
+            c = scan_symbol("BTC", beyond_short_trigger_bars(), tf="M5")
+
+        self.assertTrue(c["cisd"])
+        self.assertFalse(c["mss"])
+        self.assertIn("beyond_trigger_extreme", c["confirm_bar"]["market_fail"])
+        self.assertFalse(c["pushable"])
+        self.assertEqual(c["not_pushable_reason"], "chase")
+        self.assertEqual(c["ltf_status"], "chase")
+        self.assertIsNone(c["entry_confirm_bar"])
+
+    def test_confirm_tf_role_map_vs_entry(self):
+        from scanner_service.structure import confirm_tf_role
+
+        role, map_tf, hint = confirm_tf_role("M5")
+        self.assertEqual(role, "entry_confirm")
+        self.assertEqual(map_tf, "M5")
+        self.assertEqual(hint, "M5")
+        role_m, map_tf, hint_m = confirm_tf_role("H4")
+        self.assertEqual(role_m, "map_confirm")
+        self.assertEqual(map_tf, "H4")
+        self.assertEqual(hint_m, "M5")
+
+
+class LtfConfirmAttachTest(unittest.TestCase):
+    def test_wants_ltf_filters(self):
+        from scanner_service.scanner import wants_ltf_confirm
+
+        base = {
+            "symbol": "BTC", "tf": "M15", "direction": "SHORT", "sweep": True,
+            "state": "READY", "mss": True, "cisd": True, "stale_data": False,
+            "target_crowded": False,
+        }
+        self.assertTrue(wants_ltf_confirm(base))
+        self.assertFalse(wants_ltf_confirm({**base, "symbol": "PEPE"}))
+        self.assertFalse(wants_ltf_confirm({**base, "cisd": True, "mss": False}))
+        self.assertFalse(wants_ltf_confirm({**base, "target_crowded": True}))
+        self.assertFalse(wants_ltf_confirm({**base, "tf": "M5"}))
+        self.assertFalse(wants_ltf_confirm({**base, "stale_data": True}))
+
+    def test_apply_ltf_upgrades_map_parent_pushable(self):
+        from scanner_service.scanner import apply_ltf_confirm_bar, scan_symbol
+
+        parent = scan_symbol("BTC", sweep_short_bars(), tf="M15")
+        self.assertFalse(parent["pushable"])
+        self.assertEqual(parent["not_pushable_reason"], "map_tf_not_entry")
+        # Same fixture as M5 = entry confirm with MSS
+        upgraded = apply_ltf_confirm_bar(parent, sweep_short_bars(), ltf_tf="M5")
+        self.assertIsNotNone(upgraded["ltf_confirm_bar"])
+        self.assertEqual(upgraded["ltf_confirm_bar"]["role"], "entry_confirm")
+        self.assertTrue(upgraded["pushable"])
+        self.assertIsNotNone(upgraded["entry_confirm_bar"])
+        self.assertEqual(upgraded["ltf_status"], "entry_pending")
+
+    def test_apply_ltf_beyond_trigger_is_chase_not_pushable(self):
+        from scanner_service.scanner import apply_ltf_confirm_bar, scan_symbol
+
+        parent = scan_symbol("BTC", sweep_short_bars(), tf="M15")
+        upgraded = apply_ltf_confirm_bar(
+            parent,
+            beyond_short_trigger_bars(),
+            ltf_tf="M5",
+        )
+
+        self.assertIsNotNone(upgraded["ltf_confirm_bar"])
+        self.assertIn(
+            "beyond_trigger_extreme",
+            upgraded["ltf_confirm_bar"]["market_fail"],
+        )
+        self.assertFalse(upgraded["pushable"])
+        self.assertEqual(upgraded["not_pushable_reason"], "chase")
+        self.assertEqual(upgraded["ltf_status"], "chase")
+        self.assertIsNone(upgraded["entry_confirm_bar"])
+
+    def test_apply_ltf_cisd_only_beyond_trigger_is_still_chase(self):
+        from scanner_service.scanner import apply_ltf_confirm_bar, scan_symbol
+
+        parent = scan_symbol("BTC", sweep_short_bars(), tf="M15")
+        with mock.patch(
+            "scanner_service.scanner.mss_after_sweep",
+            return_value=(None, False),
+        ):
+            upgraded = apply_ltf_confirm_bar(
+                parent,
+                beyond_short_trigger_bars(),
+                ltf_tf="M5",
+            )
+
+        self.assertTrue(upgraded["ltf_cisd"])
+        self.assertFalse(upgraded["ltf_mss"])
+        self.assertIn(
+            "beyond_trigger_extreme",
+            upgraded["ltf_confirm_bar"]["market_fail"],
+        )
+        self.assertFalse(upgraded["pushable"])
+        self.assertEqual(upgraded["not_pushable_reason"], "chase")
+        self.assertEqual(upgraded["ltf_status"], "chase")
+        self.assertIsNone(upgraded["entry_confirm_bar"])
+
+    def test_apply_ltf_direction_mismatch(self):
+        from scanner_service.scanner import apply_ltf_confirm_bar, scan_symbol
+
+        parent = scan_symbol("BTC", sweep_short_bars(), tf="M15")
+        # Long-only mirror bars as LTF while parent short
+        upgraded = apply_ltf_confirm_bar(parent, mirror(sweep_short_bars()), ltf_tf="M5")
+        self.assertEqual(upgraded["ltf_status"], "direction_mismatch")
+        self.assertFalse(upgraded["pushable"])
+        self.assertIsNone(upgraded["ltf_confirm_bar"])

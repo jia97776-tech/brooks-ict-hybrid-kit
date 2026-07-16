@@ -23,7 +23,7 @@ NEWS_WINDOW_MIN = 30
 
 FX_MAJORS = {"EUR", "GBP", "USD", "JPY", "AUD", "NZD", "CAD", "CHF", "CNY"}
 USD_PROXIES = {"XAUUSD", "XAGUSD", "XTIUSD", "US500", "NAS100", "US30",
-               "BTC", "ETH", "SOL", "DOGE"}
+               "BTC", "ETH", "SOL", "DOGE", "DXY", "USIDX"}
 
 
 def symbol_currencies(symbol: str) -> set[str]:

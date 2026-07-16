@@ -14,8 +14,6 @@ Run from cron a few minutes after each scan:
 from __future__ import annotations
 
 import json
-import os
-import shutil
 import subprocess
 import time
 import urllib.request
@@ -25,12 +23,8 @@ from scanner_service.papertrack import SIGNALS_FILE, _key, _load
 
 DATA_DIR = SIGNALS_FILE.parent
 PUSHED_FILE = DATA_DIR / "pushed.json"
-BRIDGE_CONFIG = Path(os.environ.get(
-    "FEISHU_BRIDGE_CONFIG",
-    str(Path.home() / "feishu-claude-bridge" / "config.json"),
-)).expanduser()
-CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
-RECLAUDE_BIN = os.environ.get("RECLAUDE_BIN") or shutil.which("reclaude")
+BRIDGE_CONFIG = Path("/home/ubuntu/feishu-claude-bridge/config.json")
+CLAUDE_BIN = "/home/ubuntu/.npm-global/bin/claude"
 
 FRESH_WINDOW_S = 40 * 60
 COOLDOWN_S = 4 * 3600
@@ -101,10 +95,7 @@ def second_review(signal: dict) -> tuple[bool, str]:
                 "dol", "rr", "rr_now", "mss", "cisd", "swept_level", "reason")}
     prompt = REVIEW_PROMPT.format(signal=json.dumps(compact, ensure_ascii=False))
     last = ""
-    binaries = [CLAUDE_BIN]
-    if RECLAUDE_BIN and RECLAUDE_BIN not in binaries:
-        binaries.append(RECLAUDE_BIN)
-    for binary in binaries:
+    for binary in (CLAUDE_BIN, "/home/ubuntu/.local/bin/reclaude"):
         try:
             result = subprocess.run(
                 [binary, "-p", "--model", "claude-sonnet-5", "--effort", "low",

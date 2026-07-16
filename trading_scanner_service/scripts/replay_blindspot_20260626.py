@@ -9,10 +9,8 @@ import json
 import sys
 import time
 import urllib.request
-from pathlib import Path
 
-SERVICE_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(SERVICE_ROOT))
+sys.path.insert(0, "/home/ubuntu/trading_scanner_service")
 from scanner_service.sources import Bar  # noqa: E402
 from scanner_service.scanner import scan_symbol  # noqa: E402
 

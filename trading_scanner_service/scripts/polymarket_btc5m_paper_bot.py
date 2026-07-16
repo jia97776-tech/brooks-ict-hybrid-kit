@@ -11,7 +11,7 @@ Strategies
 Settlement: when window closes, winner mid≈1 / loser≈0 → paper PnL.
 
 Usage:
-  cd /path/to/trading_scanner_service
+  cd /home/ubuntu/trading_scanner_service
   python3 scripts/polymarket_btc5m_paper_bot.py
   python3 scripts/polymarket_btc5m_paper_bot.py --strategy both --shares 5
   python3 scripts/polymarket_btc5m_paper_bot.py --state /tmp/pm_bot_state.json \\

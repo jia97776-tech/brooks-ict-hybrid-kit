@@ -32,7 +32,7 @@ ETH【周线】：现货分区接，本周只重述计划不改损。
 
 用户说「剥/日内/趋势/周线」时，强制该类规则，不得擅自降级或升级。
 
-Journal / 统计键名：`scalp | intraday | trend | weekly`
+Journal / 统计键名：`scalp | intraday | trend | weekly`  
 （旧日志 `swing`→按 `trend` 读；`position`→按 `weekly` 读。新写入只用新名。）
 
 ---
@@ -106,10 +106,10 @@ Journal / 统计键名：`scalp | intraday | trend | weekly`
 
 ## 选类决策（内心，秒级）
 
-1. 用户点名级别 → 用该级。
-2. 持仓时长意图：分钟 / 当日 / 多日 / 多周+。
-3. 止损自然宽度：噪音级 → 只可能是剥（且过白名单）；要 W1 失效 → 周线。
-4. 逆 HTF/逆 D1 → 最多剥或日内近端，禁止趋势/周线逆大级别硬扛。
+1. 用户点名级别 → 用该级。  
+2. 持仓时长意图：分钟 / 当日 / 多日 / 多周+。  
+3. 止损自然宽度：噪音级 → 只可能是剥（且过白名单）；要 W1 失效 → 周线。  
+4. 逆 HTF/逆 D1 → 最多剥或日内近端，禁止趋势/周线逆大级别硬扛。  
 5. 默认：**日内**。拿不准时选日内，不要默默升到趋势/周线。
 
 ---
@@ -128,12 +128,12 @@ Journal / 统计键名：`scalp | intraday | trend | weekly`
 ## Journal + 样本纪律
 
 ```bash
-python3 ~/trade_journal/journal.py add \
+python3 /home/ubuntu/trade_journal/journal.py add \
   --symbol X --side long|short --result-r N \
   --cycle <8-state> --signal <trigger> --tier ready|conditional \
   --class scalp|intraday|trend|weekly --flags <violations>
 ```
 
-- 统计 **按类分开**；剥与周线期望禁止混池。
-- 每类 ≥30 笔才谈改该类规则。
+- 统计 **按类分开**；剥与周线期望禁止混池。  
+- 每类 ≥30 笔才谈改该类规则。  
 - 新类规则先 paper，不声称 edge。

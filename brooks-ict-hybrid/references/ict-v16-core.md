@@ -1,6 +1,6 @@
 # ICT V16 Core
 
-This file is distilled from local ICT V16 manual and playbook research.
+This file is distilled from the local `D:\ClaudeWork\TradingPlaybook\ICT_V16_Manual_Core.txt` and related playbook material.
 
 ## Core Stack
 
