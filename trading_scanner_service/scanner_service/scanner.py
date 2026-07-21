@@ -5,12 +5,19 @@ from scanner_service.limit_zone import build_limit_zone
 from scanner_service.sources import Bar
 from scanner_service.structure import (
     average_true_range,
+    barbwire,
     build_confirm_bar,
     cisd_after_sweep,
+    classify_cycle,
+    climax_risk,
     contracting,
     detect_latest_sweep,
     find_swings,
+    hl_count,
+    micro_channel,
+    signal_bar_quality,
     liquidity_targets,
+    swing_strength,
     mss_after_sweep,
     untaken_swings,
 )
@@ -51,6 +58,8 @@ def _base(symbol: str, tf: str, price: float | None) -> dict:
         "poi": None,
         "dol": None,
         "dol_runner": None,
+        "dol_strength": None,
+        "dol_runner_strength": None,
         "sl": None,
         "rr": None,
         "rr_now": None,
@@ -148,6 +157,49 @@ def scan_symbol(
     mss_level, mss_ok = mss_after_sweep(bars, swings, sweep)
     cisd_level, cisd_ok = cisd_after_sweep(bars, sweep)
     dol, runner, equal = liquidity_targets(bars, swings, direction)
+    # dol_strength (P5 2026-07-20, evidence tag only — does NOT change DOL selection):
+    # weak DOL = the draw (likely run); strong = structural. Guarded — never breaks scan.
+    try:
+        _dol_kind = "low" if direction == "SHORT" else "high"
+        dol_strength = swing_strength(swings, dol, _dol_kind) if dol is not None else None
+        dol_runner_strength = swing_strength(swings, runner, _dol_kind) if runner is not None else None
+    except Exception:
+        dol_strength = dol_runner_strength = None
+
+    # Environment vetoes (2026-07-21 C10 step 1, evidence tags only). The
+    # 2,400-row counterfactual replay (scripts/replay_env_vetoes.py) measured:
+    # sbq_weak +290R net saved (survivor pool turns POSITIVE +0.148R avg),
+    # micro_ct +92R; barbwire negative (n=12, blocks winners); climax never
+    # fires at M15 scan time. NONE gate READY/pushable here — a_watch applies
+    # a soft RR-bar penalty on sbq_weak/micro_ct only; desk/second review
+    # read the tags as evidence. Guarded — never breaks the scan.
+    try:
+        env_barbwire = barbwire(bars)[0]
+        env_climax = climax_risk(bars, direction)[0]
+        _mc_side = micro_channel(bars)[0]
+        env_micro_ct = _mc_side is not None and _mc_side != direction
+        env_sbq = signal_bar_quality(bars, direction)[0]
+        env_hl = hl_count(bars[-10:], direction)
+    except Exception:
+        env_barbwire = env_climax = env_micro_ct = None
+        env_sbq = env_hl = None
+    # sweep scope (2026-07-21 F2, record-only): major = swept level was the
+    # 48-bar extreme (turtle-soup reversal candidate); internal = a secondary
+    # swing inside the leg (IDM — continuation fuel, fading it = knife catch).
+    try:
+        w48 = bars[-48:]
+        tol = 0.1 * atr
+        if sweep.side == "high":
+            env_sweep_scope = "major" if sweep.swept_level >= max(b.high for b in w48) - tol else "internal"
+        else:
+            env_sweep_scope = "major" if sweep.swept_level <= min(b.low for b in w48) + tol else "internal"
+    except Exception:
+        env_sweep_scope = None
+    # coarse cycle tag (2026-07-21 F3, record-only, gate-not-signal)
+    try:
+        env_cycle = classify_cycle(bars)
+    except Exception:
+        env_cycle = None
 
     # RR is planned from a retest of the sweep zone (the POI), with the stop
     # beyond the sweep extreme. rr_now is the degraded chase-RR from the
@@ -188,6 +240,8 @@ def scan_symbol(
             "poi": poi,
             "dol": _round_like(dol),
             "dol_runner": _round_like(runner),
+            "dol_strength": dol_strength,
+            "dol_runner_strength": dol_runner_strength,
             "mgmt": _round_like(mgmt),
             "sl": _round_like(sl),
             "rr": rr,
@@ -199,6 +253,13 @@ def scan_symbol(
             "cisd_level": _round_like(cisd_level),
             "target_crowded": crowded,
             "equal_liquidity": equal,
+            "env_barbwire": env_barbwire,
+            "env_climax": env_climax,
+            "env_micro_ct": env_micro_ct,
+            "env_sbq": env_sbq,
+            "env_hl": env_hl,
+            "env_sweep_scope": env_sweep_scope,
+            "env_cycle": env_cycle,
         }
     )
 

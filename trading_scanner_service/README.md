@@ -4,11 +4,19 @@ Local HTTP scanner for Codex live-desk use.
 
 ## Data Source Rule
 
-- Gate-only since 2026-07-14. There is no cross-venue fallback.
-- Crypto uses Gate USDT-M futures.
-- FX, metals, indexes, oil, and US stocks use Gate TradFi.
-- If Gate is unavailable, the request fails with `SourceError` instead of
-  silently mixing quotes from another venue.
+**Gate-only（2026-07-14 定规；2026-07-20 从 Bitget 改回）— 单一数据源，无跨场 fallback。**
+
+| 品种 | 价格类型 | 源 |
+|------|----------|-----|
+| 加密 (BTC/ETH/HYPE/…) | **合约** USDT-M perp | Gate futures `api.gateio.ws` |
+| 半导体股票合约 (MU/SKHYNIX/SNDK) | **合约** USDT-M perp | Gate futures |
+| 美股 (TSLA/NVDA/MSTR/CRCL) | **CFD** | Gate TradFi |
+| 金银 / 美指 / 油 / FX | **CFD** | Gate TradFi |
+| DXY | **CFD** | Gate TradFi `USIDX` |
+
+- Never use spot. Never mix Bitget/MEXC quotes.
+- Gate 不可用 → raise `SourceError`（禁止静默换场）。
+- 油对外统一 `XTIUSD`（Gate TradFi 符号）。
 
 ## Run
 

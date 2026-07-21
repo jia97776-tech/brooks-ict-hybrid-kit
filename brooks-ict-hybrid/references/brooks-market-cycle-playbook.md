@@ -81,7 +81,7 @@ HH+HL alone does not disprove range character: a rising channel is usually a til
 
 - Read: broad channel that failed the 3-group test — directional lean exists but sequence broken; edges drift.
 - Allowed: with-lean entries at range/channel edges only; breakout signals only in the lean direction.
-- Forbidden: anything in the middle third; counter-lean edge trades; treating the mild tilt as a trend to chase.
+- Forbidden: anything in the middle third; counter-lean edge trades; treating the mild tilt as a trend to chase. **(2026-07-20 G3)** Never apply channel/spike trend-following logic mid-range — no mid-range breakout chase, no mid-range 2b array hangs; with-lean entries live at edges/pullback-to-edge only.
 - Stops/targets: edge signal bar extreme +-1 tick; short targets — near structure first, opposite edge only as TP2.
 
 ### 2.7 Trading Range
@@ -197,3 +197,17 @@ Scope: these numbers come from ES RTH 5-min charts. Apply directly to index RTH 
 - Pricing order: entry -> TP1 (nearest real structure: edge, prior swing, magnet; must clear RR >= 1 on TP1 alone) -> TP2 (measured move / far edge) -> stop at the structure-failure point.
 - Do not pull TP1 closer to force the equation, and do not use TP2 to justify a trade TP1 cannot.
 - Layer targets desk-style: management level / main target (TP1) / runner (TP2-MM) — a far HTF magnet is a runner, never the default main target.
+
+## 9. 日型量化判据（2026-07-21 · gate 非 signal）
+
+外部验证收敛的可编程判据（arXiv:2605.11423 VVG 日分类器 / IBS 文献 / 趋势日阈值汇总）。**铁律：日型分类只当 gate（过滤/降级），永不当独立信号**——VVG 研究里 8 个基于日型的方向策略全部证伪，但分类器作为上下文过滤统计有效。
+
+**趋势日判据（满足越多越确信）**：
+- 日 range > **2×ATR20**（多头趋势日均 ≈2.1×，空头 ≈2.8×）
+- 收盘落在当日 range **顶/底 10%**（IBS>0.9 或 <0.1）
+- 开盘 30min 内价格与 VWAP 分离 ≥**0.3%**；首个回撤 <**25-50%** 开盘冲量
+- **80% 的趋势日在开盘 30min 内定型**；趋势日最大回撤通常 18-20%
+
+**IBS 均值回归门**：IBS=(C−L)/(H−L)；<0.2 次日偏涨、>0.8 次日偏跌——**但仅在判定为区间日时放行反转交易；趋势日/通道日 IBS 极值失效**。这就是「通道日禁逆势 fade」的量化形态：fade 之前先过日型 gate。
+
+**与 8 态周期的关系**：本节是 session/日锚定视角（含 VWAP/RTH），8 态是时间框架无关的周期频谱——两套并行使用不互替。扫描器 `env_cycle` 标签（trend/channel/range/chop 粗分类，record-only）是 8 态的机械近似，desk 裁决仍以本 playbook 判定树为准。

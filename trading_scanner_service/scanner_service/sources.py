@@ -51,6 +51,13 @@ CRYPTO = {
     "NVDA": "NVDA_USDT",
     "MSTR": "MSTR_USDT",
     "CRCL": "CRCL_USDT",
+    # Semis stock perps on Gate USDT-M futures (verified live 2026-07-20).
+    "MU": "MU_USDT",
+    "MICRON": "MU_USDT",
+    "SKHYNIX": "SKHYNIX_USDT",
+    "HYNIX": "SKHYNIX_USDT",
+    "SNDK": "SNDK_USDT",
+    "SANDISK": "SNDK_USDT",
 }
 
 # Legacy canonical aliases retained for symbol normalization only. These names
@@ -215,15 +222,24 @@ def normalize_timeframe(tf: str) -> str:
 
 def classify_symbol(symbol: str) -> str:
     normalized = normalize_symbol(symbol)
-    # 2026-07-14: Bitget and MEXC both removed as data sources (user's
-    # explicit choice — single source of truth, no cross-venue spread
-    # surprises). FX + XAU/XAG/NAS100/US500/US30/oil + the 4 stock perps
-    # (TSLA/NVDA/MSTR/CRCL) + DXY (USIDX) route through Gate TradFi.
-    # Crypto → Gate futures.
+    # 2026-07-14 / restore 2026-07-20: Bitget and MEXC removed — Gate only
+    # (single source of truth, no cross-venue fallback).
+    # - Crypto + MU/SKHYNIX/SNDK stock perps → Gate USDT-M futures
+    # - FX / metals / indexes / oil / TSLA·NVDA·MSTR·CRCL / DXY → Gate TradFi
     if normalized == "DXY" or normalized in FX or normalized in GATE_TRADFI_NORMALIZED:
         return "gate_tradfi"
     if normalized in CRYPTO.values():
         return "gate_crypto"
+    return "unrouted"
+
+
+def product_kind(symbol: str) -> str:
+    """Desk-facing product type: 'contract' | 'cfd' | 'unrouted'."""
+    route = classify_symbol(symbol)
+    if route == "gate_crypto":
+        return "contract"
+    if route == "gate_tradfi":
+        return "cfd"
     return "unrouted"
 
 
@@ -384,14 +400,47 @@ class GateTradFiClient:
         return sorted(bars, key=lambda bar: bar.ts)
 
 
+class GateSpotClient:
+    # Gate.io spot — context-only ratio series (e.g. ETH_BTC), never a tradeable
+    # candidate quote. Spot candlesticks are a POSITIONAL array (unlike futures'
+    # dict): [t, quote_volume, close, high, low, open, base_volume, window_closed].
+    base_url = "https://api.gateio.ws"
+
+    def bars(self, pair: str, tf: str, limit: int) -> list[Bar]:
+        normalized_tf = normalize_timeframe(tf)
+        interval = GATE_INTERVAL.get(normalized_tf)
+        if not interval:
+            raise SourceError(f"unsupported Gate timeframe: {tf}")
+        params = urllib.parse.urlencode(
+            {"currency_pair": pair, "interval": interval, "limit": min(int(limit), 1000)})
+        payload = _json_get(f"{self.base_url}/api/v4/spot/candlesticks?{params}")
+        if not isinstance(payload, list):
+            raise SourceError(f"Gate spot kline missing data for {pair}: {payload}")
+        bars = []
+        for row in payload:
+            # positional: [t, quote_vol, close, high, low, open, base_vol, closed]
+            bars.append(
+                Bar(
+                    ts=int(float(row[0])),
+                    open=float(row[5]),
+                    high=float(row[3]),
+                    low=float(row[4]),
+                    close=float(row[2]),
+                    volume=float(row[6]) if len(row) > 6 else 0.0,
+                )
+            )
+        return sorted(bars, key=lambda bar: bar.ts)
+
+
 class MarketDataRouter:
     # 2026-07-14: Bitget AND MEXC removed — Gate only (TradFi + futures), no
     # fallback. If Gate is down, price()/bars() raise SourceError instead of
     # silently mixing in a different venue's quote (user's explicit choice:
     # one source of truth, no cross-venue spread surprises).
-    def __init__(self, gate_tradfi=None, gate_crypto=None):
+    def __init__(self, gate_tradfi=None, gate_crypto=None, gate_spot=None):
         self.gate_tradfi = gate_tradfi or GateTradFiClient()
         self.gate_crypto = gate_crypto or GateCryptoClient()
+        self.gate_spot = gate_spot or GateSpotClient()
 
     def price(self, symbol: str) -> float:
         normalized = normalize_symbol(symbol)
@@ -410,6 +459,11 @@ class MarketDataRouter:
         if route == "gate_crypto":
             return self.gate_crypto.bars(normalized, tf, limit)
         raise SourceError(f"no data source configured for {symbol}")
+
+    def spot_bars(self, pair: str, tf: str, limit: int = 120) -> list[Bar]:
+        # Context-only spot ratio series (e.g. ETH_BTC). Deliberately off the
+        # symbol router so it can never be mistaken for a tradeable quote.
+        return self.gate_spot.bars(pair, tf, limit)
 
 
 def bars_to_dicts(bars: Iterable[Bar]) -> list[dict]:

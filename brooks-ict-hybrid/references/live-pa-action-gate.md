@@ -131,10 +131,12 @@ Targets must be layered by trade purpose. Do not list every visible liquidity le
 
 Use this hierarchy:
 
-1. `T0 / management level`: nearest acceptance line, EMA area, micro swing, or range midpoint. This is for partial/BE decisions, not necessarily final TP.
-2. `T1 / practical target`: nearest clean liquidity or structure level with enough room after spread/slippage. This is the default target for a live desk answer.
-3. `T2 / extension target`: next DOL only if PA follow-through is still active after T1.
-4. `Runner target`: HTF DOL only when the market state supports trend continuation or expansion. Do not make it the default target in a choppy M15 trade.
+1. `T0 = 管理位`: nearest acceptance line, EMA area, micro swing, or range midpoint. This is for partial/BE decisions, not necessarily final TP.
+2. `T1 = 主目标`: nearest clean liquidity or structure level with enough room after spread/slippage. This is the default target for a live desk answer.
+3. `T2 = 延伸目标`: next DOL only if PA follow-through is still active after T1.
+4. `Runner = runner 目标`: HTF DOL only when the market state supports trend continuation or expansion. Do not make it the default target in a choppy M15 trade.
+
+（术语统一 2026-07-21：T0/T1/T2/Runner 与 SKILL/template 的 管理位/主目标/延伸/runner 一一对应，两套命名同义，输出用中文层名。）
 
 Important translation rule:
 

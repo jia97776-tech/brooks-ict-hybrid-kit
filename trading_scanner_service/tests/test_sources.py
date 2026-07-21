@@ -58,11 +58,16 @@ class SourceRoutingTest(unittest.TestCase):
     def test_crypto_uses_gate_futures(self):
         router, gate, gate_crypto = make_router()
 
-        for symbol in ["BTC", "ETH", "HYPE"]:
+        for symbol in ["BTC", "ETH", "HYPE", "MU", "SKHYNIX", "SNDK"]:
             router.price(symbol)
 
         self.assertEqual(gate.price_symbols, [])
-        self.assertEqual(gate_crypto.price_symbols, ["BTC_USDT", "ETH_USDT", "HYPE_USDT"])
+        self.assertEqual(
+            gate_crypto.price_symbols,
+            ["BTC_USDT", "ETH_USDT", "HYPE_USDT", "MU_USDT", "SKHYNIX_USDT", "SNDK_USDT"],
+        )
+        self.assertEqual(normalize_symbol("MICRON"), "MU_USDT")
+        self.assertEqual(normalize_symbol("SANDISK"), "SNDK_USDT")
 
     def test_crypto_raises_when_gate_futures_down_no_fallback(self):
         router, _, _ = make_router(gate_crypto_fail=True)

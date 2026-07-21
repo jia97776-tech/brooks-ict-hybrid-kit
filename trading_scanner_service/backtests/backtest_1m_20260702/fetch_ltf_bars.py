@@ -17,8 +17,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-SERVICE_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(SERVICE_ROOT))
+sys.path.insert(0, "/home/ubuntu/trading_scanner_service")
 from scanner_service.sources import (  # noqa: E402
     Bar, GATE_INTERVAL, MEXC_INTERVAL, _json_get, classify_symbol, normalize_symbol,
 )

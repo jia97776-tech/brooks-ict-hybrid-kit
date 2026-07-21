@@ -10,8 +10,8 @@ import statistics
 import time
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-REPO = HERE
+HERE = Path("/tmp/claude-1000/-home-ubuntu/c850b0b3-fe82-495c-9650-776032964bec/scratchpad/backtest_1m")
+REPO = Path("/home/ubuntu/trading_scanner_service/backtests/backtest_1m_20260702")
 
 SYMBOLS = [
     "BTC", "ETH", "SOL", "DOGE",

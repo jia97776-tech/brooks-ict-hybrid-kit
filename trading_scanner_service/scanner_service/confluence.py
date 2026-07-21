@@ -450,6 +450,10 @@ def scan_confluence_retest(
             "state": state,
             "price": _r(price),
             "setup_type": "confluence_retest",
+            # papertrack pools by "model"; without it these rows were silently
+            # recorded as poi_retest and the three setups could not be separated
+            # (2026-07-21 batch B, C2)
+            "model": "confluence_retest",
             "sweep": True,
             "mss": False,
             "cisd": False,

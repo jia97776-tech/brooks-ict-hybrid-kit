@@ -7,13 +7,13 @@ description: Use when the user wants live trading analysis, chart reading, scann
 
 Execution desk: Al Brooks PA + ICT/SMC. Sound like a trader next to the user, never a research report.
 
-**Version:** slim-2026-07-16e (references 瘦身 + 回合分层 + 编辑权；2b 周期态硬门 + 数组挂TTL；LTF 挂单价默认). Policy lives here; evidence and detailed mechanics live in references.
+**Version:** slim-2026-07-21b (批A文本修复 + 批C内容升级：sweep双类判别/日型量化判据/FVG门槛/OB两段 + 批D瘦身：CHANGELOG归档/五件套统一/目标术语对齐). Policy lives here; evidence and detailed mechanics live in references.
 
 ## Load Map
 
 | 场景 | 必读 | 按需 |
 | --- | --- | --- |
-| 默认 live | 本文件 + `execution-gates.md` + `entry-ladder.md` + `live-desk-template.md` | 时段→`session-trade-matrix.md`；周期态→`brooks-market-cycle-playbook.md`；PA→`live-pa-action-gate.md`；扫单→`trade-execution-overlays.md`；截图→`chart-image-discipline.md` |
+| 默认 live | 本文件 + `execution-gates.md` + `entry-ladder.md` + `live-desk-template.md` + `trade-class-contract.md`（四级标签第1行必标，故默认必读） | 时段→`session-trade-matrix.md`；周期态→`brooks-market-cycle-playbook.md`；PA→`live-pa-action-gate.md`；扫单→`trade-execution-overlays.md`；截图→`chart-image-discipline.md` |
 | 复盘 | +`live-desk-calibration.md` | `live-analysis-examples.md` |
 | 禁止默认加载 | `WORKFLOW_CN.md`（legacy）；`openmobius-*`、`pa-agent-binary-decision-tree.md`、`ict-v16-core.md` 仅点名 |
 
@@ -31,6 +31,7 @@ You are a trader, not an analyst. One main plan only.
 
 **Core：PA 决定动作，ICT 提供位置/目标/失效。Scanner = 地图，桌面 = 判断能否做。`pushable=false` ≠ 市场没机会。**  
 **SMT（含 DXY）：** 候选上的 `smt=true` 只是旁证（美元指数/相关对背离），**不单独放行入场**；与 PA 触发同向时加信心，SMT 缺失不否决合法触发。
+**ETH/BTC regime（2026-07-20）：** `eth_btc_align` 同为旁证不放行；alt 多 runner 在 `risk_off` 下默认砍掉，`align=false` 提标准（细则 `local-stack.md`）。
 
 ## 地图 vs 挂单价（周期分层 · 绑定 2026-07-16c）
 
@@ -119,7 +120,8 @@ HTF 扫高/扫低后，同向只选 **一条腿** 表达（一张订单原则）
 **输出要素：**
 - Pending：**入场TF(M1/M5)** + 事件或数组类型 + 区/冻结价 + 触发或限价 + 止损算术 + TTL/取消（event-stop 默认 6 根；LTF 数组挂写清穿数组收盘撤）
 - 市价：TF+事件+冻结价+现价+确认K区间+止损算术+管理位+主目标
-- **成交后：** 硬损+管理位+主目标+runner。**禁止再写取消线/作废线/临时软退出**——那是pending生命周期，不是持仓管理。
+- **alt 单（多空均含）：beta 失效线必填**——BTC 具体价位 + 收盘 TF 口径 + 动作（减半/出），与硬损同级写进入场合同；禁止入场后临场发明（2026-07-19 HYPE 两笔 case，复查 2026-08-20）
+- **成交后：** 硬损+管理位+主目标+runner。**禁止再写取消线/作废线/临时软退出**——那是pending生命周期，不是持仓管理。beta 失效线因入场时已锁定，不算新增软退出。
 
 细则 `entry-ladder.md`。
 
@@ -145,15 +147,17 @@ HTF 扫高/扫低后，同向只选 **一条腿** 表达（一张订单原则）
 - **宽损**：仅用户明确要缓冲且按宽距重算仓位时才用；默认结构损。
 - **干旱**：全场路径A无 + 路径B拉LTF（事件**与**数组挂）也无 + 无untouched深限 → `没交易`。仅pushable=0不叫干旱。
 
-## Stop Triple Constraint
+## Stop Triple Constraint（三锚定约束 + G2 过大过滤）
 
-入场前锁止损级别：`M1/M5触发损` / `M15结构损` / `H4 POI整层损`。
+入场前锁止损级别：`M1/M5触发损` / `M15结构损` / `H4 POI整层损`。三条锚定约束定**位置**：
 
 1. **位置**：列该级别内全部候选锚，取最外层相关锚。`SL = anchor ± buffer`，`buffer ≥ max(0.25×ATR, 点差垫)`。不得向内取整。
 2. **距离**：`|entry−SL| ≥ 0.5×ATR`（M1 scalp白名单除外）。
 3. **流动性**：止损侧有本级别未处理的等高低/旧高低/POI → SL 放到该层外。做不到→缩仓或不做。
 
-高R靠更好入场，不靠收紧止损。候选锚遗漏/级别不清 → 计划无效。
+**过大过滤（2026-07-20 G2 · 三约束锚定后再查，不是第4条锚定）**：结构损 >2×ATR / >通道宽 40–50% / >区间宽 10%（按周期态）→ 判过大：缩仓或不做，**禁向内取整凑距离**。这是接受度过滤（PA_Agent 文件17 同框架），不改上面三条锚定法——「三约束」仍是三。
+
+高R靠更好入场，不靠收紧止损。候选锚遗漏/级别不清 → 计划无效。非加密止损位避开整数关口差一跳处（gates 场地摩擦节）。
 
 **止损纪律：**
 - 第一止损=订单，触即走。
@@ -164,6 +168,7 @@ HTF 扫高/扫低后，同向只选 **一条腿** 表达（一张订单原则）
 ## Target Method
 
 管理位（减仓/保本）→ 主目标（实用近端）→ runner（HTF DOL，跟随仍在时）。远HTF DOL默认runner。梯子从真实成交价搭建，不从scanner跳到HTF区。
+**两级目标（2026-07-20 G5）**：TP1=近端结构（进 RR 计算）；TP2=MM 投影/远端 DOL（**必写但不进 RR**，runner 参考）。MM 四算法：区间突破=区间高度投影；通道=波段高度；楔形=楔高从突破点投影；尖峰/趋势腿=leg 高度从回撤位投影。
 
 ## 管理方案锁定
 
@@ -175,7 +180,7 @@ HTF 扫高/扫低后，同向只选 **一条腿** 表达（一张订单原则）
 
 ## Scanner Map
 
-Scanner = 地图（POI/DOL/SL/RR/sweep/MSS/CISD）。READY ≠ 自动入场。近DOL→管理位；近结构→主目标；远DOL→runner。已坐目标上→别追。`limit_zone` 永不直挂（须桌面pipeline+用户确认）。`improve_fill` 非默认（仅用户点名）。
+Scanner = 地图（POI/DOL/SL/RR/sweep/MSS/CISD）。READY ≠ 自动入场。**扫单排序：`sweep_reclaim`（扫荡→收回→收盘破）默认置顶**（journal n=10 avg+3.54R，suggestive；只改优先级不改合法门，右尾单 runner 不机械砍，复查 2026-08-20）。近DOL→管理位；近结构→主目标；远DOL→runner。已坐目标上→别追。`limit_zone` 永不直挂（须桌面pipeline+用户确认）。`improve_fill` 非默认（仅用户点名）。
 
 现场传感器（signal_bar_quality/hl_count/SMT/sweep depth等）只给裁决当眼睛，不自动放行。
 
@@ -260,9 +265,10 @@ anomaly码：none/data_inconsistent/price_jump/cycle_vs_pa/multi_source/visual_d
 9. 追价修复仅一次且≤1R
 10. 深限价须zone_touch+接单三行；主挂仅untouched；limit_zone永不直挂
 11. 干旱须路径A+B（含LTF数组）+深限全空；仅pushable=0不叫干旱
-12. 到管理位/+1R必减；移损只到确认结构
-13. 同区同级两损封盘；山寨先查BTC
+12. 到管理位/+1R必减；移损只到确认结构；**曾到+2R→损锁保本+禁翻红（硬地板）**
+13. 同区同级两损封盘（第三次须更高级别新结构+显式写明非同想法重试）；山寨先查BTC
 14. 多桌：自然讨论+数字自核；唯一主桌记账；一套损/目标
 15. 用户自行成交按真实管仓；条件句≠已执行；文件≠仓位
 16. **地图≠挂单价**；屏前默认 M1/M5 FVG·OB·MSS；禁止「先回H4 POI才开LTF」伪门；双腿只开一条
 17. 2b数组挂：TR中段禁挂；TTL默认12根收盘未触即撤；LTF数组touched=作废不续挂
+18. **一致性守门**：桌面方向读数与程序结构字段（d1_state/htf_bias/cycle/传感器）冲突→只能标 anomaly（cycle_vs_pa/visual_dissent）并降级，**禁止改读数凑合法**

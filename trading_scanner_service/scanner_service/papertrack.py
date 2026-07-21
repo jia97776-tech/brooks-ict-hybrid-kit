@@ -31,11 +31,18 @@ FILL_WINDOW_S = 24 * 3600
 RESOLVE_WINDOW_S = 72 * 3600
 TF_SECONDS = {"M15": 900, "H4": 14400}
 SCALP_R = 2.0  # parallel exit model: same fill, near target at min(2R, DOL)
+FLOOR_R = 2.0  # +2R hard-floor variant (2026-07-21 C9): once MFE >= 2R the
+               # stop locks to breakeven — floor2r_r = 0.0 instead of -1.0.
+               # Measures the desk's +2R hard-floor rule on the machine pool.
 
 RECORD_FIELDS = [
     "symbol", "tf", "direction", "state", "price", "entry_ref", "sl", "dol",
     "dol_runner", "rr", "rr_now", "late", "target_crowded", "swept_level",
     "mss", "cisd", "reason", "news_risk", "news_event", "htf_bias", "counter_htf", "mgmt",
+    # environment veto tags (2026-07-21 C10 — record-only, see scanner.py)
+    "env_barbwire", "env_climax", "env_micro_ct", "env_sbq", "env_hl",
+    # sweep scope + coarse cycle tags (2026-07-21 F2/F3 — record-only)
+    "env_sweep_scope", "env_cycle",
 ]
 
 
@@ -107,7 +114,7 @@ def record_candidates(candidates: list[dict], now: int | None = None) -> int:
             row.update({"ts": now, "session": session_of(now), "model": c.get("model", "poi_retest"),
                         "outcome": "pending", "filled": False,
                         "fill_ts": None, "resolve_ts": None, "result_r": None,
-                        "mfe_r": None, "scalp_r": None})
+                        "mfe_r": None, "scalp_r": None, "floor2r_r": None})
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             pending_keys.add(k)
             added += 1
@@ -169,6 +176,7 @@ def _resolve_one(row: dict, bars, now: int) -> None:
                 stopped = (b.high >= sl) if short else (b.low <= sl)
                 if stopped:
                     mark_scalp(b, stopped=True)
+                    row["floor2r_r"] = -1.0  # same-bar stop: floor never armed
                     row.update(outcome="loss", result_r=-1.0, resolve_ts=b.ts)
                     return
                 continue
@@ -179,9 +187,12 @@ def _resolve_one(row: dict, bars, now: int) -> None:
             target = (b.low <= dol) if short else (b.high >= dol)
             mark_scalp(b, stopped)
             if stopped:  # same-bar SL+DOL -> loss, conservative
+                # +2R floor variant: BE instead of -1 once MFE armed the floor
+                row["floor2r_r"] = 0.0 if (row.get("mfe_r") or 0) >= FLOOR_R else -1.0
                 row.update(outcome="loss", result_r=-1.0, resolve_ts=b.ts)
                 return
             if target:
+                row["floor2r_r"] = float(row["rr"] or 0)
                 row.update(outcome="win", result_r=float(row["rr"] or 0), resolve_ts=b.ts)
                 return
             if b.ts - row["fill_ts"] > RESOLVE_WINDOW_S:

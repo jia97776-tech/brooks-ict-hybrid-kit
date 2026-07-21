@@ -38,8 +38,7 @@ import sys
 import time
 from pathlib import Path
 
-SERVICE_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(SERVICE_ROOT))
+sys.path.insert(0, "/home/ubuntu/trading_scanner_service")
 from scanner_service.sources import Bar  # noqa: E402
 from scanner_service.structure import SWING_K, average_true_range, find_swings  # noqa: E402
 from scanner_service.ltf_refine import SL_BUFFER_ATR, M1_SYMBOLS, ltf_tf  # noqa: E402
@@ -47,7 +46,7 @@ from scanner_service import papertrack as pt  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 BARS_DIR = HERE / "bars"
-OUT_REPO_DIR = HERE
+OUT_REPO_DIR = Path("/home/ubuntu/trading_scanner_service/backtests/backtest_1m_20260702")
 IN_JSONL = OUT_REPO_DIR / "signals_backtest.jsonl"
 OUT_JSONL = OUT_REPO_DIR / "signals_backtest_ltf.jsonl"
 REPORT_MD = OUT_REPO_DIR / "report_ltf.md"

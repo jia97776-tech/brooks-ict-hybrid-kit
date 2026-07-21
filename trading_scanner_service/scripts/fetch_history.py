@@ -1,13 +1,13 @@
 """Deep kline history downloader (breaks the local router's 1000-bar cap).
 
-Sources (same endpoints/symbol maps as scanner_service.sources):
+Sources (Bitget-only, same endpoints/symbol maps as scanner_service.sources):
   - Crypto (11): Bitget USDT-M futures.
       recent chunk : /api/v2/mix/market/candles          (limit 1000, no paging needed)
       deep history : /api/v2/mix/market/history-candles  (limit 200, endTime paging - PROBED OK)
-      fallback     : MEXC contract kline with start/end paging.
   - Non-crypto (metals/indexes/oil/FX): bitgettradfi getMoreKlineDataV2.
       PROBED 2026-07-10: accepts endTime (ms) paging, 1000 bars/page, ascending;
       XAGUSD/US30/EURUSD/USOUSD all return data >=100 days back on 5m.
+  - No cross-venue fallback (no MEXC/Gate). If Bitget fails, the TF is left partial.
 
 Output: data/history/{SYMBOL}_{TF}.jsonl  (one bar per line: ts,open,high,low,close; ts=seconds, bar open time)
 Idempotent + incremental: existing files are topped up at the front (recent) and
@@ -49,7 +49,6 @@ PLAN = {
 }
 BITGET_GRAN = {"M5": "5m", "M15": "15m", "D1": "1D"}
 TRADFI_STEP = {"M5": "5m", "M15": "15m", "D1": "1d"}
-MEXC_INT = {"M5": "Min5", "M15": "Min15", "D1": "Day1"}
 
 
 def _get(url: str, attempts: int = 3, timeout: float = 15.0):
@@ -83,15 +82,6 @@ def bitget_page(sym: str, tf: str, end_ms: int) -> list[tuple]:
         raise RuntimeError(f"bitget history-candles error {sym} {tf}: {p}")
     rows = p.get("data") or []
     return [(int(r[0]) // 1000, float(r[1]), float(r[2]), float(r[3]), float(r[4])) for r in rows]
-
-
-def mexc_page(sym: str, tf: str, end_s: int, span_bars: int = 1900) -> list[tuple]:
-    start_s = end_s - span_bars * PLAN[tf][0]
-    q = urllib.parse.urlencode({"interval": MEXC_INT[tf], "start": start_s, "end": end_s})
-    p = _get(f"https://contract.mexc.com/api/v1/contract/kline/{sym}_USDT?{q}")
-    d = p.get("data") or {}
-    ts, o, h, l, c = (d.get(k, []) for k in ("time", "open", "high", "low", "close"))
-    return [(int(ts[i]), float(o[i]), float(h[i]), float(l[i]), float(c[i])) for i in range(len(ts))]
 
 
 def tradfi_page(sym_id: str, tf: str, end_ms: int) -> list[tuple]:
@@ -212,23 +202,8 @@ def fetch_symbol_tf(sym: str, tf: str) -> None:
             if rows and min(rows) > cutoff:
                 page_back(fetch, min(rows) * 1000 - 1, cutoff, None, rows, f"{sym} {tf} tradfi-deep")
     except Exception as exc:  # noqa: BLE001
-        print(f"  [{sym} {tf}] primary source failed: {exc}", flush=True)
-        if is_crypto:
-            try:
-                end = min(rows) if rows else now
-                while end > cutoff:
-                    data = mexc_page(sym, tf, end)
-                    if not data:
-                        break
-                    new = sum(1 for r in data if rows.setdefault(r[0], r) is r)
-                    oldest = data[0][0]
-                    if oldest >= end and new == 0:
-                        break
-                    end = oldest - 1
-                    time.sleep(SLEEP_S)
-                print(f"  [{sym} {tf}] MEXC fallback used", flush=True)
-            except Exception as exc2:  # noqa: BLE001
-                print(f"  [{sym} {tf}] MEXC fallback also failed: {exc2}", flush=True)
+        # Bitget-only: do not fall back to another venue (keeps history pure).
+        print(f"  [{sym} {tf}] bitget source failed (no cross-venue fallback): {exc}", flush=True)
 
     ordered = save_jsonl(path, rows)
     quality(sym, tf, ordered, tf_s)

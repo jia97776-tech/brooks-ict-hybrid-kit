@@ -18,6 +18,8 @@ Edit this file when the machine stack moves. SKILL.md should not hardcode host p
 - `CONDITIONAL_READY` = sweep with something missing (`reason`)
 - `ARMED` = liquidity map only
 - `dol` / `dol_runner` = near / far untaken swing liquidity
+- `dol_strength` / `dol_runner_strength`（2026-07-20 P5，OpenMobius v0.3.0 回灌）= 该 DOL 的 ICT 强弱：`weak`=其后 move 未破前结构→**真诱导目标（更可能被扫，主目标更靠谱）**；`strong`=破了前结构（BOS）→结构位、不易被干净扫；`null`=无前/后确认摆动不可分类。**纯旁证 tag，不改 DOL 选择、不放行入场**——攒数据验证「weak DOL 更易被打到/runner 更好」后再议是否重排选位。桌面用法：主目标落在 weak 位更可托底；runner 到 strong 位提防不干净。
+- `limit_zone.ce_warning`（2026-07-20 P5）= 入场后 body 收破 CE(50%) 逆方向 = **软离场预警**（早于 `sl_anchor` 全失效）。描述符，非入场门；喂桌面持仓软离场判断。
 - `rr` = planned from POI retest; `rr_now` = degraded chase RR
 - `late=true` / `target_crowded=true` → retest plan or do not chase
 - `htf_bias` / `counter_htf`: M15 carries H4 bias (sweep-reversal first, EMA20 always-in fallback). `counter_htf=true` → cap CONDITIONAL_READY; scalp to **near** liquidity only; no far DOL runner
@@ -37,6 +39,7 @@ Edit this file when the machine stack moves. SKILL.md should not hardcode host p
 - **improve_fill** (2026-07-14h, v2 §六): optional **subfield of** `confirm_bar` when entry TF + `market_ok` + FVG in confirm range. Fields: `zone_tf`, `zone`, `zone_source`, `limit_price` (upper edge), `fallback_bars`, `fallback=market_if_still_ok`. Not default; user opt-in. Void if price past trigger extreme.
 - **track / model / anomaly** (2026-07-14i): candidate + ledger fields. `track=cashflow|asymmetric` (machine prefills asymmetric for confluence/drilldown; desk may override). `model` = screening desk name when recorded. `anomaly` short codes; machine may only prefill mechanical `data_inconsistent`; desk fills visual codes. Ledger: `stats_summary()` includes `by_track` / `by_anomaly`.
 
+- **eth_btc_align / market_context**（2026-07-20）：每轮扫描算一次 Gate 现货 `ETH_BTC` ratio regime（`/scanner/status` → `market_context`：ratio/h4_trend/d1_trend/regime=risk_on|risk_off）；9 个 alt 候选贴 `eth_btc_align`（方向与 ratio 趋势同向=true）。**纯旁证（与 SMT 同级）**：不 gate pushable/READY、不进推送；桌面用法=alt 多的 runner 层在 risk_off 下默认砍掉、align=false 的 alt 单提标准。ETH/BTC 自身无此字段。
 - Flags are evidence, not entries — still pass PA reclassification + pipeline
 
 ## Universe (scanned)
@@ -53,6 +56,7 @@ Edit this file when the machine stack moves. SKILL.md should not hardcode host p
   - **同向 USD 基**：`USDJPY/USDCAD/USDCHF`↔`DXY`。  
   - 候选字段：`smt` / `smt_partner` / `smt_inverse` / `smt_note`。
 - **US stocks（2026-07-11 试点，scan-only）**: `TSLA NVDA MSTR CRCL`（Gate TradFi feed）。触发只认美股 RTH（13:30-20:00 UTC）；盘外报价只当地图；财报日按红字新闻；buffer 放大一档；a_watch 永不推送，papertrack 先攒样本。
+- **Semis（2026-07-17 试点，scan-only）**: `MU`（美光，美股 RTH）、`SKHYNIX`（海力士）。海力士 2026-07-10 起以 **SKHY ADR 上市纳斯达克**（10 ADR=1 普通股；Gate 永续 ≈ 普通股美元价 = 10×ADR），**双时段有效：KRX 00:00-06:30 UTC + 美股 RTH 13:30-20:00 UTC**，两时段外只当地图。新上市票（<1 月）：无历史 H4/D1 结构可依，POI/DOL 只认上市后真实高低，buffer 放大一档，仓位减半。走 Gate USDT-M 股票永续（非 TradFi）；a_watch 不推送；别名 MICRON/HYNIX 可用。
 
 Watchlist but **not** scanned (say so, do not invent candidates): UK100 / HK50 / USDCNH / XBRUSD.
 Avoid non-USD FX crosses and odd thin commodities unless user asks.
@@ -83,6 +87,10 @@ python3 /home/ubuntu/trade_journal/journal.py add \
   --class scalp|intraday|trend|weekly --flags <violations> \
   --source desk|user|a_watch|mixed   # 触发是谁读的（2026-07-10 起必填，测桌面 vs 人肉）
 # aliases accepted by journal: swing→trend, position→weekly
+# --signal 固定词表（2026-07-20 起强制，自由文本会稀释分桶）：
+#   sweep_reclaim | mss_stop | cisd_conditional | poi_limit | ltf_array |
+#   drilldown_chain | second_entry | user_limit | a_watch_push | other(备注写flags)
+# 周末样本标记：周六/周日的单一律加 --flags weekend（攒30笔后裁决周末是否提标准）
 
 python3 /home/ubuntu/trade_journal/journal.py stats
 

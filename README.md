@@ -1,5 +1,8 @@
 # Brooks ICT Hybrid 完整分享包
 
+> **Snapshot notice / 快照声明**：本仓为某时点快照，**非 source of truth**。本地 skill/scanner 持续演进，此包可能落后数版；版本以 `brooks-ict-hybrid/SKILL.md` 内 Version 字段为准（当前同步：slim-2026-07-21b，2026-07-21）。内部硬编码的 `/home/ubuntu/...` 路径请改为你自己的环境。
+
+
 版本：2026-07-12j
 
 公开分享版：skill + 本地扫描器。仓库不包含个人交易日志、历史行情、账号密钥或本机运行配置。

@@ -16,7 +16,7 @@ from scanner_service.confluence import C_TIER, scan_confluence_retest
 from scanner_service.drilldown import scan_drilldown_chain
 from scanner_service.ltf_refine import ltf_tf
 from scanner_service.scanner import apply_ltf_confirm_bar, scan_symbol, wants_ltf_confirm
-from scanner_service.structure import d1_spike, htf_bias, smt_divergence, smt_partner
+from scanner_service.structure import d1_spike, eth_btc_regime, htf_bias, smt_divergence, smt_partner
 from scanner_service.sources import MarketDataRouter, SourceError, bars_to_dicts, normalize_timeframe
 
 
@@ -25,12 +25,21 @@ DEFAULT_SYMBOLS = [
     "XAUUSD", "XAGUSD", "XTIUSD",
     "NAS100", "US500", "US30",
     "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD",
-    # US Dollar Index (Gate USIDX) — scanned + used as SMT partner for USD legs.
+    # US Dollar Index — Gate TradFi USIDX only (no Bitget product).
     "DXY",
     # US stock perps pilot (2026-07-11): scan-only, no a_watch push;
-    # MSTR/CRCL cluster with BTC-beta for sample counting.
+    # MSTR/CRCL cluster with BTC-beta for sample counting. Source: Bitget mix.
     "TSLA", "NVDA", "MSTR", "CRCL",
+    # Semis pilot: Bitget USDT-M stock perps, scan-only.
+    # MU = US RTH; SKHYNIX = KRX RTH (00:00-06:30 UTC); SNDK = SanDisk US RTH.
+    "MU", "SKHYNIX", "SNDK",
 ]
+
+# True crypto alts for the ETH/BTC breadth stamp — deliberately excludes BTC/ETH
+# (ratio numerator/denominator) AND the stock perps (MU/SNDK/SKHYNIX/TSLA/... route
+# gate_crypto but ETH/BTC strength is meaningless for equities). Extend when a new
+# crypto coin joins the universe.
+_ETH_BTC_ALTS = frozenset({"SOL", "DOGE", "XRP", "SUI", "HYPE", "PEPE", "ZEC", "TAO", "WLD"})
 
 SCAN_MODES = {
     "intraday": [("M15", 240)],
@@ -237,16 +246,54 @@ class ScannerApp:
             )
         except Exception as exc:
             errors["candidates_ledger"] = str(exc)
+
+        # ETH/BTC breadth gauge (alt-vs-BTC strength), computed once per scan.
+        # Context only (like SMT): surfaced in status + stamps alt candidates,
+        # never gates pushable/READY. Fully guarded — cannot break a live scan.
+        market_context = self._compute_market_context(errors)
+        try:
+            trend = market_context.get("h4_trend")
+            for c in candidates:
+                sym = (c.get("symbol") or "").upper()
+                if sym not in _ETH_BTC_ALTS:
+                    continue
+                if c.get("direction") in ("LONG", "SHORT") and trend in ("LONG", "SHORT"):
+                    # rising ETH/BTC (LONG) supports alt longs; falling supports shorts
+                    c["eth_btc_align"] = c["direction"] == trend
+                else:
+                    c["eth_btc_align"] = None
+        except Exception as exc:
+            errors["eth_btc_align"] = str(exc)
+
         self.last_status = {
             "job_id": job_id,
             "mode": mode,
             "status": "done" if not errors else "partial",
             "n_candidates": len(candidates),
             "candidates": candidates,
+            "market_context": market_context,
             "error": errors or None,
             "updated_at": int(time.time()),
         }
         return self.last_status
+
+    def _compute_market_context(self, errors: dict) -> dict:
+        """ETH/BTC breadth gauge, computed once per scan (context only, like SMT).
+
+        Native Gate SPOT ETH_BTC — same venue as everything else (Gate-only),
+        never a tradeable quote. Any failure is recorded and returns 'unknown';
+        it must never break a live scan.
+        """
+        try:
+            h4 = self.router.spot_bars("ETH_BTC", "H4", 120)
+            d1 = self.router.spot_bars("ETH_BTC", "D1", 120)
+            return eth_btc_regime(h4, d1)
+        except Exception as exc:
+            errors["market_context"] = str(exc)
+            return {
+                "ratio": None, "h4_trend": "NEUTRAL", "d1_trend": "NEUTRAL",
+                "regime": "unknown", "note": f"unavailable: {exc}", "source": "gate_spot",
+            }
 
     def _attach_smt(self, candidates: list, errors: dict) -> list:
         """Attach SMT confirm fields using DXY / correlated partners.

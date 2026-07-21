@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 
 from scanner_service.ltf_refine import SL_BUFFER_ATR, detect_ltf_trigger, ltf_tf
-from scanner_service.papertrack import FILL_WINDOW_S, _key, _load
+from scanner_service.papertrack import FILL_WINDOW_S, _key, _load, session_of
 from scanner_service.push_ready import second_review, send_feishu
 from scanner_service.structure import average_true_range, find_swings
 
@@ -33,7 +33,18 @@ STATE_FILE = DATA_DIR / "a_watch.json"
 
 MIN_RR = 2.0                 # planned R at trigger, entry->dol vs entry->ltf sl
 TRIGGER_FRESH_BARS = 2       # push only if trigger bar closed within this many LTF bars
-MAX_PUSH_PER_DAY = 6         # A单 quota — quality over quantity
+MAX_PUSH_PER_DAY = 6         # A单 base quota — quality over quantity
+HARD_PUSH_CAP = 9            # absolute daily ceiling incl. the exceptional lane
+EXCEPTIONAL_RR = 4.0         # rr >= this may exceed the base quota up to HARD_PUSH_CAP
+# Escalating quality bar (2026-07-21 batch B): the cap was blind FIFO — 11d
+# audit showed 58 pushed / 214 dropped purely by time of day, so late high-RR
+# triggers lost their slot to early rr~2 ones. The nth push of the day must
+# clear a rising RR bar so mediocre signals can't consume the whole quota.
+PUSH_RR_BARS = (2.0, 2.0, 2.5, 2.5, 3.0, 3.0)
+
+
+def _rr_bar(pushed: int) -> float:
+    return PUSH_RR_BARS[min(pushed, len(PUSH_RR_BARS) - 1)]
 TZ_OFFSET_S = 8 * 3600       # user's trading day is UTC+8
 
 CRYPTO = {"BTC", "ETH", "SOL", "DOGE", "XRP", "SUI", "HYPE", "PEPE", "ZEC", "TAO", "WLD"}
@@ -45,7 +56,26 @@ A_TIER = {"XAUUSD", "XTIUSD", "US500"}
 C_TIER = {"ZEC", "EURUSD", "US30", "PEPE"}
 # Stock perps pilot: scan for papertrack sample only, never watch/push
 # until ~2 weeks of outcomes are reviewed (user decision 2026-07-11).
-SCAN_ONLY = {"TSLA", "NVDA", "MSTR", "CRCL"}
+SCAN_ONLY = {"TSLA", "NVDA", "MSTR", "CRCL", "MU", "SKHYNIX"}
+
+
+def _fetch_ltf(router, symbol: str, parent_ts: int, now: int):
+    """LTF bars with M1→M5 fallback. Gate TradFi M1 died 2026-07-20 01:56–06:14
+    (131× HTTP 400) and the A-tier US500 watch was blind for ~4h with no
+    fallback; M5 structure is late for indexes but beats total blindness.
+    Returns (bars, tf, tf_seconds); raises SourceError only if both TFs fail."""
+    from scanner_service.sources import SourceError
+
+    tf, tf_seconds = ltf_tf(symbol)
+    need = min(1000, (now - parent_ts) // tf_seconds + 30)
+    try:
+        return router.bars(symbol, tf, int(need)), tf, tf_seconds
+    except SourceError as exc:
+        if tf != "M1":
+            raise
+        print(f"[a_watch] {symbol} M1 failed ({exc}) — falling back to M5", flush=True)
+        need = min(1000, (now - parent_ts) // 300 + 30)
+        return router.bars(symbol, "M5", int(need)), "M5", 300
 
 
 def _day(ts: int) -> str:
@@ -78,6 +108,35 @@ def a_grade(r: dict, now: int) -> bool:
             and not r.get("target_crowded")
             and now - r["ts"] <= FILL_WINDOW_S
             and (not _is_weekend(now) or r["symbol"].upper() in CRYPTO))
+
+
+MAX_FADE_PER_DAY = 2         # counter-HTF sweep-reversal scalps, inside the daily 6
+
+
+def fade_grade(r: dict, now: int) -> bool:
+    """Counter-HTF sweep-reversal scalp lane (2026-07-17, XAU 3970 triple-bottom
+    miss). The scanner permanently demotes counter_htf rows to CONDITIONAL_READY,
+    which excluded the entire range-extreme reversal class from the watch even
+    though the LTF three-step is exactly the confirmation it was waiting for.
+    A-tier symbols only; the only blockers allowed to remain on the row are
+    counter_htf itself and the missing MSS/CISD close-through (the LTF trigger
+    supplies that). Fresh D1 leg against still hard-blocks (D1 seniority).
+    Pushed as scalp framing — near target only, capped at MAX_FADE_PER_DAY."""
+    sym = r.get("symbol", "").upper()
+    return (sym in A_TIER
+            and r.get("outcome") == "pending"
+            and r.get("model", "poi_retest") == "poi_retest"
+            and r.get("counter_htf") is True
+            and not r.get("counter_d1")
+            and r.get("state") in ("READY", "CONDITIONAL_READY")
+            and r.get("swept_level") is not None
+            and r.get("dol") is not None
+            and (r.get("rr") or 0) >= MIN_RR
+            and not r.get("late")
+            and not r.get("news_risk")
+            and not r.get("target_crowded")
+            and now - r["ts"] <= FILL_WINDOW_S
+            and (not _is_weekend(now) or sym in CRYPTO))
 
 
 MAX_CONT_PER_PARENT = 2      # continuation pushes per parent signal per day
@@ -203,6 +262,21 @@ def format_push(parent: dict, cand: dict, ltf: str, magnet: dict | None = None) 
                 f"（{parent['tf']} READY → {ltf} 三步走齐）\n"
                 f"扫 {parent['swept_level']} 后回踩，{ltf} 收盘破回调结构。\n")
     two_r = entry - 2 * risk if parent["direction"] == "SHORT" else entry + 2 * risk
+    fade_line = ""
+    if parent.get("counter_htf"):
+        fade_line = (f"⚠️ 逆HTF（H4 bias {parent.get('htf_bias')}）扫池反转——剥头皮口径：\n"
+                     f"只打近池，到管理位/主目标坚决落袋，不拿远DOL，不留runner。\n")
+    env_flags = []
+    if parent.get("env_sbq") == "weak":
+        env_flags.append("信号棒weak")
+    if parent.get("env_micro_ct"):
+        env_flags.append("逆微通道")
+    if parent.get("env_barbwire"):
+        env_flags.append("barbwire")
+    env_line = ""
+    if env_flags:
+        env_line = (f"⚠️ 环境标记：{'、'.join(env_flags)}"
+                    f"（回放降级因子，RR 门槛已抬高；二审重点核结构质量）\n")
     magnet_line = ""
     if magnet is not None:
         zone = sorted([float(magnet["sl"]), float(magnet["swept_level"])])
@@ -212,6 +286,8 @@ def format_push(parent: dict, cand: dict, ltf: str, magnet: dict | None = None) 
                        f"要么损放 {zone[0] if parent['direction'] == 'LONG' else zone[1]} 外侧并减半仓，"
                        f"要么限价 POI 内等深接（可能不成交），别站两层流动性中间。\n")
     return (head
+            + fade_line
+            + env_line
             + magnet_line
             + f"入场参考 {entry}，SL {cand['sl']}（触发窗极值外），计划 RR {cand['rr']}\n"
             + f"管理二选一（进场前定死，中途不换）：默认 +1R（{round(one_r, 8)}）必减；"
@@ -233,18 +309,22 @@ def run(now: int | None = None, dry: bool = False) -> dict:
 
     records = _load()
     parents = [r for r in records if a_grade(r, now)]
+    fades = [r for r in records if not a_grade(r, now) and fade_grade(r, now)]
+    faded_today = sum(1 for v in state.values()
+                      if v.get("fade") and v.get("day") == today
+                      and v.get("status") in ("pushed", "dry"))
     checked, triggered, sent, errors = 0, 0, 0, 0
     bar_cache: dict[str, list] = {}
-    for parent in parents:
+    for parent in parents + fades:
+        is_fade = fade_grade(parent, now) and not a_grade(parent, now)
         pkey = json.dumps(_key(parent), ensure_ascii=False)
-        tf, tf_seconds = ltf_tf(parent["symbol"])
-        need = min(1000, (now - parent["ts"]) // tf_seconds + 30)
         try:
             if parent["symbol"] not in bar_cache:
-                bar_cache[parent["symbol"]] = router.bars(parent["symbol"], tf, int(need))
-            bars = bar_cache[parent["symbol"]]
-        except SourceError:
+                bar_cache[parent["symbol"]] = _fetch_ltf(router, parent["symbol"], parent["ts"], now)
+            bars, tf, tf_seconds = bar_cache[parent["symbol"]]
+        except SourceError as exc:
             errors += 1
+            print(f"[a_watch] bars failed {parent['symbol']}: {exc}", flush=True)
             continue
         todo: list[tuple[str, dict]] = []
         if pkey not in state:
@@ -252,6 +332,10 @@ def run(now: int | None = None, dry: bool = False) -> dict:
             cand = detect_ltf_trigger(parent, bars)
             if cand is not None:
                 todo.append((pkey, cand))
+        # continuation also runs on fade parents: V-reversals never retest the
+        # POI (XAU 2026-07-17 03:00 leg), so the only catchable entries are the
+        # local sweep->reclaim->break sequences inside the reversal leg. The
+        # fade daily cap + per-parent cont cap + second review still gate it.
         for cand in detect_continuation_triggers(parent, bars):
             ckey = f"{pkey}|cont|{cand['swept_level']}"
             if ckey not in state:
@@ -272,9 +356,20 @@ def run(now: int | None = None, dry: bool = False) -> dict:
                 state[skey] = {"status": "late_trigger", "day": today, "ts": trigger_ts}
                 print(f"[a_watch] LATE {label} trigger aged {age}s — miss, not pushed", flush=True)
                 continue
-            if cand["rr"] < MIN_RR:
+            rr_bar = max(MIN_RR, _rr_bar(pushed_today))
+            # soft env penalty (2026-07-21 C10): replay-validated demotion
+            # factors — sbq_weak (+290R net saved, survivor pool +0.148R) and
+            # counter-micro-channel (+92R). Never a hard block: the trigger
+            # just has to clear a higher bar.
+            if parent.get("env_sbq") == "weak" or parent.get("env_micro_ct"):
+                rr_bar += 0.5
+            # asia-session soft demotion (2026-07-21 C7): paper by-session
+            # split asia −0.28R vs london +0.05R (n≈2,957) — penalty, no block
+            if session_of(now) == "asia":
+                rr_bar += 0.5
+            if cand["rr"] < rr_bar:
                 state[skey] = {"status": "rr_too_low", "day": today, "ts": trigger_ts}
-                print(f"[a_watch] RR {cand['rr']} < {MIN_RR} {label} — skipped", flush=True)
+                print(f"[a_watch] RR {cand['rr']} < bar {rr_bar} (push #{pushed_today + 1}) {label} — skipped", flush=True)
                 continue
             if cand.get("model") == "continuation":
                 cont_used = sum(1 for k, v in state.items()
@@ -284,14 +379,24 @@ def run(now: int | None = None, dry: bool = False) -> dict:
                     state[skey] = {"status": "parent_cont_cap", "day": today, "ts": trigger_ts}
                     print(f"[a_watch] cont cap per parent — {label} dropped", flush=True)
                     continue
-            if pushed_today >= MAX_PUSH_PER_DAY:
-                state[skey] = {"status": "daily_cap", "day": today, "ts": trigger_ts}
-                print(f"[a_watch] daily cap {MAX_PUSH_PER_DAY} reached — {label} dropped", flush=True)
+            if is_fade and faded_today >= MAX_FADE_PER_DAY:
+                state[skey] = {"status": "fade_cap", "day": today, "ts": trigger_ts}
+                print(f"[a_watch] fade cap {MAX_FADE_PER_DAY} reached — {label} dropped", flush=True)
                 continue
+            if pushed_today >= MAX_PUSH_PER_DAY:
+                # exceptional lane: an outsized-RR trigger may exceed the base
+                # quota, but never the hard ceiling
+                if not (cand["rr"] >= EXCEPTIONAL_RR and pushed_today < HARD_PUSH_CAP):
+                    state[skey] = {"status": "daily_cap", "day": today, "ts": trigger_ts}
+                    print(f"[a_watch] daily cap {MAX_PUSH_PER_DAY} reached — {label} dropped", flush=True)
+                    continue
+                print(f"[a_watch] cap-exempt exceptional rr={cand['rr']} — {label}", flush=True)
             text = format_push(parent, cand, tf, deep_magnet(parent, cand, records, now))
             if dry:
                 print(f"[a_watch] DRY would push:\n{text}", flush=True)
-                state[skey] = {"status": "dry", "day": today, "ts": trigger_ts}
+                state[skey] = {"status": "dry", "day": today, "ts": trigger_ts, "fade": is_fade}
+                if is_fade:
+                    faded_today += 1
                 continue
             ok, verdict = second_review(cand)
             if not ok:
@@ -308,15 +413,18 @@ def run(now: int | None = None, dry: bool = False) -> dict:
                 send_feishu(text)
                 sent += 1
                 pushed_today += 1
-                state[skey] = {"status": "pushed", "day": today, "ts": trigger_ts}
+                if is_fade:
+                    faded_today += 1
+                state[skey] = {"status": "pushed", "day": today, "ts": trigger_ts, "fade": is_fade}
                 print(f"[a_watch] SENT {label} rr={cand['rr']}", flush=True)
             except Exception as exc:
                 # do not mark consumed — retry next cron while still fresh
                 print(f"[a_watch] send failed {label}: {exc}", flush=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
-    return {"parents": len(parents), "checked_new": checked, "triggered": triggered,
-            "sent": sent, "pushed_today": pushed_today, "errors": errors}
+    return {"parents": len(parents), "fades": len(fades), "checked_new": checked,
+            "triggered": triggered, "sent": sent, "pushed_today": pushed_today,
+            "errors": errors}
 
 
 if __name__ == "__main__":

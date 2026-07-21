@@ -289,6 +289,31 @@ def htf_bias(bars: list[Bar], lookback: int = 16) -> tuple[str, str]:
     return "NEUTRAL", "no confirmed structure, mixed EMA"
 
 
+def eth_btc_regime(h4_bars: list[Bar], d1_bars: list[Bar] | None = None) -> dict:
+    """ETH/BTC ratio as an alt-vs-BTC breadth gauge (context only, never an entry).
+
+    trend "LONG"  = ratio rising  = alts strong vs BTC = risk_on
+    trend "SHORT" = ratio falling = BTC dominance      = risk_off
+    Mirrors SMT: evidence for desk confidence, does not gate or auto-hang.
+    """
+    if not h4_bars:
+        return {
+            "ratio": None, "h4_trend": "NEUTRAL", "d1_trend": "NEUTRAL",
+            "regime": "unknown", "note": "no ETH/BTC bars", "source": "gate_spot",
+        }
+    ratio = round(float(h4_bars[-1].close), 8)
+    h4_trend, h4_basis = htf_bias(h4_bars)
+    d1_trend = "NEUTRAL"
+    if d1_bars:
+        d1_trend, _ = htf_bias(d1_bars)
+    regime = {"LONG": "risk_on", "SHORT": "risk_off"}.get(h4_trend, "neutral")
+    note = f"ETH/BTC {ratio:g} · H4={h4_trend} D1={d1_trend} · {h4_basis}"
+    return {
+        "ratio": ratio, "h4_trend": h4_trend, "d1_trend": d1_trend,
+        "regime": regime, "note": note, "source": "gate_spot",
+    }
+
+
 def liquidity_targets(bars: list[Bar], swings: list[Swing], direction: str) -> tuple[float | None, float | None, bool]:
     """(nearest target, runner target, equal-cluster flag) from untaken swing liquidity.
 
@@ -305,6 +330,32 @@ def liquidity_targets(bars: list[Bar], swings: list[Swing], direction: str) -> t
     runner = levels[1] if len(levels) > 1 else None
     equal = bool(levels[1:] and abs(levels[1] - levels[0]) <= 0.15 * atr)
     return nearest, runner, equal
+
+
+def swing_strength(swings: list[Swing], price: float, kind: str, tol: float = 1e-9) -> str | None:
+    """ICT strong/weak of a swing level — DOL context (OpenMobius v0.3.0 回灌，2026-07-20 P5).
+
+    strong = the move that FOLLOWED this swing broke prior opposite structure (BOS)
+             → structural level, less likely to be cleanly run.
+    weak   = that move FAILED to break prior structure → the draw (liquidity likely run).
+    Returns "strong"|"weak"|None (None = not classifiable: no prior/next confirming swing).
+    Evidence-only tag; does NOT change DOL selection — validate on data before re-ranking.
+    """
+    idx = next((i for i, s in enumerate(swings)
+                if s.kind == kind and abs(s.price - price) <= tol), None)
+    if idx is None:
+        return None
+    if kind == "high":
+        prior_low = next((swings[j].price for j in range(idx - 1, -1, -1) if swings[j].kind == "low"), None)
+        next_low = next((swings[j].price for j in range(idx + 1, len(swings)) if swings[j].kind == "low"), None)
+        if prior_low is None or next_low is None:
+            return None
+        return "strong" if next_low < prior_low else "weak"
+    prior_high = next((swings[j].price for j in range(idx - 1, -1, -1) if swings[j].kind == "high"), None)
+    next_high = next((swings[j].price for j in range(idx + 1, len(swings)) if swings[j].kind == "high"), None)
+    if prior_high is None or next_high is None:
+        return None
+    return "strong" if next_high > prior_high else "weak"
 
 
 # --- PA_Agent backfill: environment-quality vetoes (2026-07-11) -------------
@@ -481,6 +532,29 @@ def trigger_failed_early(trigger_bar: Bar, later_bars: list[Bar], direction: str
         if direction == "SHORT" and b.close > trigger_bar.open:
             return True
     return False
+
+
+def classify_cycle(bars: list[Bar], lookback: int = 32) -> str:
+    """Coarse cycle context tag (2026-07-21 F3, record-only): trend /
+    channel_up / channel_down / range / chop. A mechanical shadow of the
+    8-state playbook for pooling stats — gate input for the desk, NEVER a
+    signal (VVG day-type research: classifiers hold up as context filters,
+    every direction strategy built on them failed)."""
+    if len(bars) < lookback:
+        return "unknown"
+    w = bars[-lookback:]
+    atr = average_true_range(bars)
+    if atr <= 0:
+        return "unknown"
+    if barbwire(bars)[0]:
+        return "chop"
+    net = abs(w[-1].close - w[0].open)
+    side = micro_channel(bars)[0]
+    if side is not None and net >= 1.5 * atr:
+        return "channel_up" if side == "LONG" else "channel_down"
+    if net >= 3.0 * atr:
+        return "trend"
+    return "range"
 
 
 # Positive-correlation SMT partners (move together).

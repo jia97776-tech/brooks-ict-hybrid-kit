@@ -275,6 +275,8 @@ def _pack(
         "state": state,
         "price": _r(price),
         "setup_type": "drilldown_chain",
+        # papertrack pools by "model" — see confluence.py note (2026-07-21 C2)
+        "model": "drilldown_chain",
         "sweep": True,
         "mss": bool(h4_ev.get("mss")),
         "cisd": bool(h4_ev.get("cisd")),

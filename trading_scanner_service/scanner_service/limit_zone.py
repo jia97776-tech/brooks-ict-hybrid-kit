@@ -119,10 +119,18 @@ def build_limit_zone(
     else:
         invalidate = f"{tf} 收盘 < { _r(sl_anchor) }"
 
+    # CE(50%) 软离场预警 (P5 2026-07-20, OpenMobius v0.3.0)：入场后 body 收破 CE
+    # (逆方向) = 早于 sl_anchor 的失效预警，喂桌面软离场判断。描述符，非入场门。
+    if direction == "SHORT":
+        ce_warning = f"入场后 body 收破 CE {_r(refine)} 之上 = 软离场预警（早于 sl_anchor 失效）"
+    else:
+        ce_warning = f"入场后 body 收破 CE {_r(refine)} 之下 = 软离场预警（早于 sl_anchor 失效）"
+
     return {
         "zone": [_r(zlo), _r(zhi)],
         "zone_source": " + ".join(sources),
         "refine": _r(refine),
+        "ce_warning": ce_warning,
         "sl_anchor": _r(sl_anchor),
         "sl_anchor_bar": _fmt_bar_time(bars[sweep.extreme_index].ts),
         "buffer": _r(buf),
