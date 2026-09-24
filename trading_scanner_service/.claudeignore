@@ -1,7 +1,0 @@
-data/
-__pycache__/
-*.log
-*.jsonl
-*.db
-_bk_*
-*.bak*

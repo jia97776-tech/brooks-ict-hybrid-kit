@@ -1,1 +1,0 @@
-"""Local market scanner service."""
