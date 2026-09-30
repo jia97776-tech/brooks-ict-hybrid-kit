@@ -13,7 +13,7 @@
 import argparse, collections, json, math, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_exam import norm_sym
+from build_exam import norm_sym, to_ts
 from dk.common import Bars, atr, boot_ci, iso, kit_path, load_config, mean, pct, settle
 
 H = 3600
@@ -92,7 +92,13 @@ def main():
         p = kit_path(os.path.join(a.dir, t, "calls.jsonl"))
         for l in open(p, encoding="utf-8"):
             if l.strip():
-                c = json.loads(l); c["sym"] = norm_sym(c["sym"]); calls.append(c)
+                c = json.loads(l)
+                if not isinstance(c.get("ts"), (int, float)):  # 外部整理的数据可给 "time": "2021-06-03T08:15:00Z"
+                    c["ts"] = to_ts(c.get("ts") or c["time"])
+                c.setdefault("thread", t); c.setdefault("author", "?"); c.setdefault("type", "limit")
+                c["sym"] = norm_sym(c["sym"]); c["side"] = c["side"].upper(); c["type"] = c["type"].lower()
+                c["entry"], c["stop"] = float(c["entry"]), float(c["stop"])
+                calls.append(c)
     if a.tz_scan:
         tz_scan(bars, calls); return
 
