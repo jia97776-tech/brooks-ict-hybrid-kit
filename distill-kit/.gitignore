@@ -1,0 +1,7 @@
+config.json
+data/
+cache/
+runs/
+exams/
+selftest_tmp/
+__pycache__/
