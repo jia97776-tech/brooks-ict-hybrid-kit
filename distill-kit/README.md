@@ -232,6 +232,32 @@ python3 score.py --exam exams/tom.jsonl --run tom1_hold_base --run tom1_hold_opt
 | `selftest.py` | 假数据全流程自测 |
 | `dk/` | 公共件：K 线、上下文、提示词、模型调用、打分 |
 
+## 附：Forex Factory 实时日志 → 事前喊单 → 对比基线
+
+用论坛里「开仓前发帖」的交易日志，检验真人主观选单能否超过机器基线（先到 +2R 的比例约 30.5%）。三步都在本地跑。
+
+```bash
+pip install playwright && python3 -m playwright install chromium
+# 1) 抓全帖（弹出浏览器：第一次手动过 Cloudflare、登录 FF、把账号时区设成 GMT）
+python3 ff_fetch.py https://www.forexfactory.com/thread/<帖子号>-<标题>
+# 2) 拆楼主帖子 + 抽喊单（先 --inspect 看切得对不对；格式规整可加 --no-llm）
+python3 ff_extract.py --thread <帖子号> --inspect
+python3 ff_extract.py --thread <帖子号> --sym EURUSD
+# 3) 时区自检 → 事前校验 + 结算
+python3 ff_check.py --thread <帖子号> --tz-scan
+python3 ff_check.py --thread <帖子号>
+```
+
+**事前校验怎么判**（全靠 K 线，不信作者自述）：
+- **市价单**：发帖时的价格要贴近他写的进场价。
+- **挂单**：发帖时价格还没到进场价，而且发帖前 6 小时内也没碰过。
+- 不满足的一律剔除，报告里会列出剔除原因和数量。
+
+**其他说明：**
+- K 线用 `prep_bars.py` 准备，外汇用你们的 FXCM M1 即可。
+- 解析是宽松匹配。`--inspect` 显示切错了，就改 `ff_extract.py` 里 `POST_MARK` / `TEXT_DATE` 这几条正则。
+- 结论只看「先到 2R」比例的 95% CI 下沿是否高于基线。几十单时 CI 很宽，多半「分不开」，这是正常的。
+
 ## 局限，先说在前面
 
 - **样本量**：Tom 能用的真题约 380–550 道，扣掉缺 K 线的品种还会更少，留出集大约 100 道。忠实分的 CI 宽度大约 ±0.05–0.08，小改动分不出好坏。
