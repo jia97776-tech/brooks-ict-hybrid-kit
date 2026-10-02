@@ -230,6 +230,7 @@ python3 score.py --exam exams/tom.jsonl --run tom1_hold_base --run tom1_hold_opt
 | `score.py` | 忠实分、结算、两份答卷配对比较 |
 | `optimize.py` | 反思 → 改条目 → 验收，循环 |
 | `selftest.py` | 假数据全流程自测 |
+| `brooks_fetch.py` / `brooks_extract.py` | Brooks 每日 ES 报告抓取、切节、抽条件单（见文末附录） |
 | `dk/` | 公共件：K 线、上下文、提示词、模型调用、打分 |
 
 ## 附：Forex Factory 实时日志 → 事前喊单 → 对比基线
@@ -257,6 +258,60 @@ python3 ff_check.py --thread <帖子号>
 - K 线用 `prep_bars.py` 准备，外汇用你们的 FXCM M1 即可。
 - 解析是宽松匹配。`--inspect` 显示切错了，就改 `ff_extract.py` 里 `POST_MARK` / `TEXT_DATE` 这几条正则。
 - 结论只看「先到 2R」比例的 95% CI 下沿是否高于基线。几十单时 CI 很宽，多半「分不开」，这是正常的。
+
+## 附：Brooks 每日 E-mini 报告 → 条件单（试点）
+
+问题：Brooks Trading Course 免费的每日 ES Trading Update，**只看「今日预期」部分**，每篇能抽出几张可执行的条件单（方向 + 数字触发价 + 数字止损）？
+两步都是纯标准库，不用浏览器，云端也能跑。
+
+```bash
+# 1) 翻存档页抓最近一年（默认 365 天；每次请求间隔 1.5 秒；HTML 缓存，断点续跑）
+python3 brooks_fetch.py                       # 或 --since 2025-10-02
+python3 brooks_fetch.py --parse-only          # 改了切节规则后，不联网重新解析
+# 2) 抽条件单（后端用 config.json 的 default_backend；答案缓存在 cache/<后端>/）
+python3 brooks_extract.py --sample 30         # 先抽 30 篇看
+python3 brooks_extract.py --workers 3         # 全年
+python3 brooks_extract.py --stats             # 只看统计
+# 3) 可执行单直接出考卷（需要 ES 的 K 线，见下）
+python3 build_exam.py --format canonical --src data/brooks/canonical.jsonl --out exams/brooks.jsonl
+```
+
+**产出（都在 `data/brooks/`，不进 git）：**
+- `index.jsonl`：存档页列出的全部文章（链接、标题、品种、类型）。非 ES 的只记链接，不下载（要下载加 `--all-markets`）。
+- `html/`：ES 报告原始 HTML。
+- `reports.jsonl`：每篇一行。发布 / 修改时间、交易日、距 RTH 开盘（09:30 美东，按夏令时换算）的分钟数、
+  `modified_after_publish_hours`、按标题切开的各节，以及 `premarket_text`。
+- `orders.jsonl`：每篇一行，`orders` 是抽出的全部条件单（含只有描述没有数字的），`levels` 是文中出现的全部价位。
+- `canonical.jsonl`：只收方向 + 数字触发 + 数字止损的单，canonical 格式，`time` = datePublished（UTC）。
+
+**只给模型看什么：** `premarket_text` = 「E-mini daily chart」一节 +「E-mini 5-minute chart and what to expect today」一节。
+- 「Yesterday's E-mini setups」不要：箭头是收盘后画的。
+- 「Summary of today's ... price action」和收盘视频不要：收盘后写的。
+- 抽完会自检：原话必须在 `premarket_text` 里逐字找得到（`quote_found`），找不到但出现在收盘后段落的记 `quote_in_postclose`；
+  价格必须是原文里的数字（`prices_in_text`），并且离当篇价位中位数不超过 15%（`prices_plausible`）。
+
+**单型映射：** `stop_entry`（buy above / sell below）→ `"stop"`，`limit` → `"limit"`，`market` → `"market"`，`other` → `"limit"`。
+`build_exam` / `settle` 只区分市价和非市价：非市价单按「进场价在现价哪侧」自动判成回踩或突破，所以 `"stop"` 能直接用，
+`edge_check` 会把它单独列一组。
+
+**注意：**
+- **报告是盘中写的，不是盘前。** 近一年 datePublished 大多在 RTH 开盘后几个小时，正文常写 "As of bar 45"。
+  盲测切图必须切在 `last_bar_close_utc`（今日预期一节提到的最后一根 5 分钟 K 线收盘）和 `date_published_utc` 中较晚的那个之前；
+  考卷 `time` 用的是 datePublished，比信息截止时刻晚，触发价可能在这段空档里已经被碰过，结算前要剔掉。
+- **datePublished 不全可信。** 有十来篇是整秒的排程时间（06:20:00、15:00:00），正文却写着 "As of bar 30"，甚至收盘后的内容；
+  `pub_time_round` 和 `published_before_last_bar`（发布时刻比文中最后一根 K 线收盘早 15 分钟以上）标出了这些。
+  用 `info_cutoff_utc`（两者取较晚）当信息截止更稳；这两类可疑的报告，出考卷前最好剔掉。
+- `last_bar_mentioned` 优先取 "As of bar N"，否则取正文最大的 K 线编号，但跳过提到昨天、上周五、某月某日的句子。
+  这是启发式，个别篇会偏。
+- 切节时已排除夹在 ES 报告里的 EURUSD 段落（`other_market`），以及收盘后写成「What happened today / What to expect tomorrow」格式的那篇。
+  「No written report today」的占位篇没有今日预期一节，`has_premarket=false`。
+- 交易日取标题 "Trading Update: <星期> <日期>"。星期几和日期对不上时（标题笔误），改用发布日（太平洋时间）。
+- `dateModified` 几乎每篇都比发布晚十几个小时，那是收盘后补「Summary」一节，不代表盘前部分被改过；但没法证明没改过。
+- 只认文中写出的数字。Brooks 的触发和止损多数写成 K 线编号（"above bar 45 high"）或描述（"below yesterday's low"），
+  这些记在 `trigger_ref` / `stop_ref`，价格是 null，不算可执行单。要换成数字，得用当天的 5 分钟 K 线回填。
+- 近年署名多为 Brad Wolff（Al Brooks 团队），`reports.jsonl` 的 `author` 字段记着。
+- **本机没有 ES 的 K 线。** 结算 / 出考卷要在你自己的机器上用 `prep_bars.py` 准备 `data/bars/ES_M15.jsonl`（品种名就叫 `ES`；
+  报告里是 ES 期货点位，别用 SPX 现货或 US500 CFD 代替，换月价差会让价位对不上）。
 
 ## 局限，先说在前面
 
