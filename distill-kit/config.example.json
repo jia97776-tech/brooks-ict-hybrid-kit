@@ -1,0 +1,34 @@
+{
+  "bars_dir": "data/bars",
+  "context": "W1:26,D1:100,H4:60,H1:48",
+  "workers": 4,
+  "default_backend": "claude",
+  "reflector_backend": "claude",
+  "backends": {
+    "claude": {
+      "cmd": ["claude", "-p", "--output-format", "text"],
+      "stdin": true,
+      "timeout": 900
+    },
+    "codex": {
+      "cmd": ["codex", "exec", "-m", "gpt-6-astra", "--skip-git-repo-check", "-"],
+      "stdin": true,
+      "timeout": 900
+    },
+    "grok": {
+      "cmd": ["grok", "-p", "{prompt}", "--disable-web-search", "--disallowed-tools", "run_terminal_command", "--output-format", "plain"],
+      "stdin": false,
+      "timeout": 900
+    },
+    "api": {
+      "type": "anthropic",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "max_tokens": 16000,
+      "fallbacks": true
+    },
+    "mock": {
+      "type": "mock"
+    }
+  }
+}
